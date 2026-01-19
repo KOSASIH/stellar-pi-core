@@ -16,3 +16,18 @@ description = "Workspace for Hyper-tech Pi Ecosystem Super App Smart Contracts o
 license = "MIT"
 keywords = ["stellar", "soroban", "pi", "blockchain", "stablecoin"]
 categories = ["cryptography::cryptocurrencies", "smart-contracts"]
+
+[dependencies]
+soroban-sdk = "0.9"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+sha2 = "0.10"
+stellar-sdk = "0.1"  # For Stellar integration (add if needed)
+
+# AI integration (optional, for Rust-Python bridge if required)
+pyo3 = { version = "0.18", optional = true }
+
+[features]
+default = []
+python-ai = ["pyo3"]  # Enable for AI calls from Rust
