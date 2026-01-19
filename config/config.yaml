@@ -1,0 +1,13 @@
+# GodHead Nexus Configuration
+pi_coin:
+  symbol: "PI"
+  total_supply: 100000000000  # 100 billion PI
+  fixed_value_usd: 314159  # $314,159 per PI (in cents for precision)
+  valid_sources: ["mining", "rewards", "p2p"]  # Only these sources accepted
+ai:
+  autonomous_interval: 60  # Seconds for monitoring loop
+  hyper_ai_threshold: 0.95  # Confidence for source validation
+  model_path: "ai/models/source_validator.pkl"
+blockchain:
+  consensus: "proof_of_work"  # Modified for AI integration
+  network_port: 11625  # Pi Network default
