@@ -13,80 +13,13 @@ import {
   type NovaTransaction,
   type OracleNode,
 } from './shared/novaPolicy.ts';
+import { NovaHyperMind } from './server/hypermind.ts';
 
 function sha256(payload: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
-// NovaPurityEnforcer: Gambling keyword detector
-function containsGamblingKeyword(text: string): string | null {
-  const lower = text.toLowerCase();
-  for (const kw of NovaPolicy.gamblingKeywords) {
-    if (lower.includes(kw)) {
-      return kw;
-    }
-  }
-  return null;
-}
-
-// RibaGuard AI: Zero Riba / Zero Interest scanner across memos, app specs, and categories
-const RIBA_EXTRA_TERMS = ['lending', 'yield farming', 'interest bearing', 'usury'];
-
-function detectRibaViolation(text: string): { isRiba: boolean; matchedTerm: string | null } {
-  const lower = text.toLowerCase();
-  for (const kw of NovaPolicy.ribaKeywords) {
-    if (lower.includes(kw)) {
-      return { isRiba: true, matchedTerm: kw };
-    }
-  }
-  for (const model of NovaPolicy.bannedFinancialModels) {
-    if (lower.includes(model) || lower.includes(model.replace(/_/g, ' '))) {
-      return { isRiba: true, matchedTerm: model };
-    }
-  }
-  for (const extra of RIBA_EXTRA_TERMS) {
-    if (lower.includes(extra)) {
-      return { isRiba: true, matchedTerm: extra };
-    }
-  }
-  return { isRiba: false, matchedTerm: null };
-}
-
-// NovaPurityEnforcer: Origin source verifier
-function verifyNovaPuritySource(source: string): { ok: boolean; reason: string } {
-  const normalized = source.trim().toLowerCase();
-  if (!normalized) {
-    return { ok: false, reason: 'Missing NVC coin origin source.' };
-  }
-  for (const blocked of NovaPolicy.blacklistedSources) {
-    if (normalized === blocked || normalized.includes(blocked)) {
-      return {
-        ok: false,
-        reason: `Rejected tainted/exchange source "${source}" by NovaPurityEnforcer.`,
-      };
-    }
-  }
-  const allowed = NovaPolicy.allowedSources.some((s) => s === normalized);
-  if (!allowed) {
-    return {
-      ok: false,
-      reason: `Source "${source}" is not in allowed origins (${NovaPolicy.allowedSources.join(', ')}).`,
-    };
-  }
-  return { ok: true, reason: 'Verified pure NVC origin.' };
-}
-
-// NovaValuePolicy: Mathematical identity check ($3.14 USD)
-function verifyNovaValuePeg(reportedValueUsd: number): { ok: boolean; reason: string } {
-  if (!isValidNovaValue(reportedValueUsd)) {
-    return {
-      ok: false,
-      reason: `NovaValuePolicy: reported value $${reportedValueUsd.toFixed(2)} deviates from $3.14 Nova Peg and was flagged for community vote.`,
-    };
-  }
-  return { ok: true, reason: 'Verified $3.14 Nova Peg mathematical identity.' };
-}
-
+const hyperMind = new NovaHyperMind();
 const nowMs = Date.now();
 
 // In-memory state with realistic NVC seed data: 3 oracle nodes, 3 apps, 3 transactions, 5 audit logs
@@ -128,6 +61,9 @@ const state: {
       status: 'accepted',
       reason: 'Verified pure NVC origin at fixed $3.14 Nova Peg valuation.',
       ribaRejected: false,
+      gamblingRejected: false,
+      exchangeRejected: false,
+      riskScore: 4,
       purityScore: 1.0,
       hash: sha256({ id: 'tx-nvc-001', amount: 25, source: 'mining' }),
       timestamp: new Date(nowMs - 1000 * 60 * 18).toISOString(),
@@ -144,6 +80,9 @@ const state: {
       status: 'accepted',
       reason: 'Verified pure NVC origin at fixed $3.14 Nova Peg valuation.',
       ribaRejected: false,
+      gamblingRejected: false,
+      exchangeRejected: false,
+      riskScore: 3,
       purityScore: 1.0,
       hash: sha256({ id: 'tx-nvc-002', amount: 0.286624, source: 'contribution_rewards' }),
       timestamp: new Date(nowMs - 1000 * 60 * 11).toISOString(),
@@ -160,6 +99,9 @@ const state: {
       status: 'rejected',
       reason: 'Rejected tainted/exchange source "exchange" by NovaPurityEnforcer.',
       ribaRejected: false,
+      gamblingRejected: false,
+      exchangeRejected: true,
+      riskScore: 92,
       purityScore: 0,
       hash: sha256({ id: 'tx-nvc-003', amount: 250, source: 'exchange' }),
       timestamp: new Date(nowMs - 1000 * 60 * 5).toISOString(),
@@ -171,8 +113,9 @@ const state: {
       name: 'Nova Mart',
       category: 'Commerce',
       description: 'Peer-to-peer local goods marketplace settled exclusively in fixed-value $3.14 NVC.',
+      creator: 'NVC-BUILDER-01',
       status: 'deployed',
-      complianceReason: 'Passed AHI AI anti-gambling, RibaGuard AI (0% interest), and NVC-exclusivity verification.',
+      complianceReason: 'Passed AHI AI, HyperScanner (0 Scams), RibaGuard AI (0% interest), and NVC-exclusivity verification.',
       manifestSnippet: `// NVC-Exclusive Settlement Contract\nconst FIXED_NVC_VALUE = ${NovaPolicy.fixedValueUsd};\nassertSourceAllowed(["mining", "contribution_rewards", "p2p", "marketplace", "app"]);`,
       createdAt: new Date(nowMs - 1000 * 60 * 45).toISOString(),
     },
@@ -181,8 +124,9 @@ const state: {
       name: 'Nova Logistics',
       category: 'Supply Chain',
       description: 'Transparent provenance and freight escrow paid in Micron Nova contribution rewards.',
+      creator: 'NVC-BUILDER-02',
       status: 'deployed',
-      complianceReason: 'Passed AHI AI anti-gambling, RibaGuard AI (0% interest), and NVC-exclusivity verification.',
+      complianceReason: 'Passed AHI AI, HyperScanner (0 Scams), RibaGuard AI (0% interest), and NVC-exclusivity verification.',
       manifestSnippet: `// SCP Fair Logistics Escrow\nconst MICRON_PER_NVC = ${NovaPolicy.micronNovaPerNvc};\nconst COLLATERAL_TARGET = ${NovaPolicy.collateralRatio};`,
       createdAt: new Date(nowMs - 1000 * 60 * 25).toISOString(),
     },
@@ -191,6 +135,7 @@ const state: {
       name: 'Casino Nova',
       category: 'Commerce',
       description: 'High-stakes dice and lottery wagering pool.',
+      creator: 'NVC-ROGUE-03',
       status: 'rejected',
       complianceReason: 'Rejected by NovaPurityEnforcer: gambling keyword "casino" violates no-gambling mandate.',
       manifestSnippet: `// Blocked by Compliance Gate\n// Reason: Gambling applications are strictly prohibited in Stellar Nova Core.`,
@@ -245,14 +190,14 @@ appendAudit(
   'Nova',
   'BOOT_SEQUENCE',
   'info',
-  'Initialized Stellar Nova Core on SCP low-energy consensus with 100B NVC total supply and 1.5x collateral target.',
+  'Initialized Stellar Nova Core + NovaHyperMind on SCP consensus with 100B NVC supply and 1.5x collateral target.',
   1000 * 60 * 30,
 );
 appendAudit(
   'Nova',
   'PEG_IDENTITY_LOCK',
   'accepted',
-  'NovaValuePolicy locked mathematical identity: 1 NVC = $3.14 USD (1,000,000 Micron Nova per NVC).',
+  'NovaValuePolicy & Stabilizer locked mathematical identity: 1 NVC = $3.14 USD (1,000,000 Micron Nova per NVC).',
   1000 * 60 * 24,
 );
 appendAudit(
@@ -266,88 +211,16 @@ appendAudit(
   'RibaGuard',
   'POLICY_ARMED',
   'info',
-  'RibaGuard AI active across NVC transactions and App Builder: 0% Interest strictly enforced.',
+  'Hyper-Compliance & RibaGuard AI active: 0% Interest, Gambling-Free, Gharar-Free, Scam-Free.',
   1000 * 60 * 5,
 );
 appendAudit(
   'Oracle',
   'CONSENSUS_SYNC',
   'accepted',
-  '3-region oracle quorum (ORACLE-US-01, ORACLE-ID-01, ORACLE-EU-01) verified $3.14 Nova Peg alignment.',
+  'Oracle Predictive Shield verified 3-region quorum (ORACLE-US-01, ORACLE-ID-01, ORACLE-EU-01) at $3.14.',
   1000 * 30,
 );
-
-// AHI AI (Artificial Human Intelligence): real-time NVC transaction scoring
-function evaluateWithAhiAi(params: {
-  sender: string;
-  recipient: string;
-  source: string;
-  memo: string;
-  reportedValueUsd: number;
-}): { accepted: boolean; purityScore: number; reason: string; ribaRejected: boolean } {
-  const { sender, recipient, source, memo, reportedValueUsd } = params;
-
-  const gamblingHit = containsGamblingKeyword(`${sender} ${recipient} ${source} ${memo}`);
-  if (gamblingHit) {
-    return {
-      accepted: false,
-      purityScore: 0,
-      reason: `Rejected by AHI AI Anti-Gambling Filter: prohibited keyword "${gamblingHit}" detected.`,
-      ribaRejected: false,
-    };
-  }
-
-  const ribaHit = detectRibaViolation(`${sender} ${recipient} ${source} ${memo}`);
-  if (ribaHit.isRiba) {
-    return {
-      accepted: false,
-      purityScore: 0,
-      reason: 'RibaGuard AI: Riba / Interest detected - Transaction rejected. Stellar Nova Core is 0% Interest.',
-      ribaRejected: true,
-    };
-  }
-
-  const sourceCheck = verifyNovaPuritySource(source);
-  if (!sourceCheck.ok) {
-    return {
-      accepted: false,
-      purityScore: 0,
-      reason: sourceCheck.reason,
-      ribaRejected: false,
-    };
-  }
-
-  const valueCheck = verifyNovaValuePeg(reportedValueUsd);
-  if (!valueCheck.ok) {
-    return {
-      accepted: false,
-      purityScore: 0,
-      reason: valueCheck.reason,
-      ribaRejected: false,
-    };
-  }
-
-  // Sender history check (anti-whale / repeat offender scoring)
-  const senderRejections = state.transactions.filter(
-    (t) => t.sender.toLowerCase() === sender.toLowerCase() && t.status === 'rejected',
-  ).length;
-  if (senderRejections >= 3) {
-    return {
-      accepted: false,
-      purityScore: 0.25,
-      reason: `Rejected by AHI AI Sender History Check: "${sender}" has ${senderRejections} prior compliance violations.`,
-      ribaRejected: false,
-    };
-  }
-
-  const historyBonus = senderRejections === 0 ? 1.0 : 0.92;
-  return {
-    accepted: true,
-    purityScore: historyBonus,
-    reason: 'Verified pure NVC origin at fixed $3.14 Nova Peg valuation.',
-    ribaRejected: false,
-  };
-}
 
 function buildSnapshot(): EcosystemSnapshot {
   const acceptedTransactions = state.transactions.filter((t) => t.status === 'accepted').length;
@@ -356,6 +229,8 @@ function buildSnapshot(): EcosystemSnapshot {
   const verifiedOracleNodes = state.oracleNodes.filter((n) => n.status === 'verified').length;
   const flaggedOracleNodes = state.oracleNodes.filter((n) => n.status === 'flagged').length;
   const ribaBlockedTransactions = state.transactions.filter((t) => t.ribaRejected).length;
+  const gamblingBlocked = state.transactions.filter((t) => t.gamblingRejected).length;
+  const exchangeBlocked = state.transactions.filter((t) => t.exchangeRejected).length;
 
   return {
     constants: NovaPolicy,
@@ -363,7 +238,15 @@ function buildSnapshot(): EcosystemSnapshot {
     complianceBreached: state.complianceBreached,
     aiHealthScore: Number(state.aiHealthScore.toFixed(1)),
     unethicalIncidents: state.unethicalIncidents,
+    hyperMindStatus: 'Active',
+    threatsBlocked: hyperMind.threatsBlocked,
+    networkHealth: hyperMind.networkHealth,
+    whaleProof: true,
+    scamBlocked: hyperMind.scamBlocked,
     ribaBlockedTransactions,
+    gamblingBlocked,
+    exchangeBlocked,
+    stabilizerStatus: 'LOCKED at $3.14',
     ribaPolicy: '0% Interest',
     rules: state.rules,
     metrics: {
@@ -378,6 +261,9 @@ function buildSnapshot(): EcosystemSnapshot {
     apps: state.apps,
     oracleNodes: state.oracleNodes,
     auditLog: state.auditLog,
+    hyperModules: hyperMind.modules,
+    hyperMindLog: hyperMind.liveLog,
+    bannedCreators: Array.from(hyperMind.bannedCreators),
   };
 }
 
@@ -388,12 +274,94 @@ app.get('/api/ecosystem', (_req: Request, res: Response) => {
   res.json(buildSnapshot());
 });
 
+// Hyper-Intelligence A: Oracle Predictive Shield
+app.get('/api/hyper/oracle-shield', (req: Request, res: Response) => {
+  const simulate = req.query.simulate === 'true' || req.query.mode === 'simulate';
+  const shield = hyperMind.predictMarketAttack(state.oracleNodes, simulate);
+  if (simulate) {
+    appendAudit(
+      'Oracle',
+      'PREDICTIVE_SHIELD_BLOCK',
+      'accepted',
+      `${shield.status}: ${shield.predictedAttack}. Auto-healed to $3.14.`,
+    );
+  }
+  res.json({
+    ...shield,
+    snapshot: buildSnapshot(),
+  });
+});
+
+// Hyper-Intelligence B: Anti-Whale & Anti-Sybil HyperGuard
+app.post('/api/hyper/whale-check', (req: Request, res: Response) => {
+  const wallet = String(req.body?.wallet || '').trim();
+  const amount = Number(req.body?.amount);
+  const deviceFingerprint = req.body?.deviceFingerprint ? String(req.body.deviceFingerprint) : undefined;
+
+  const result = hyperMind.checkWhaleAndSybil({ wallet, amount, deviceFingerprint });
+  if (!result.allowed) {
+    appendAudit('HyperMind', 'WHALE_SYBIL_BLOCK', 'rejected', result.reason);
+  }
+  res.status(result.allowed ? 200 : 403).json({
+    ...result,
+    snapshot: buildSnapshot(),
+  });
+});
+
+// Hyper-Intelligence C & D: Hyper-Compliance + Anti-Scam HyperScanner
+app.post('/api/hyper/compliance-check', (req: Request, res: Response) => {
+  const memo = String(req.body?.memo || '');
+  const spec = String(req.body?.spec || '');
+  const category = String(req.body?.category || '');
+
+  const check = hyperMind.scanCompliance({ memo, spec, category });
+  if (!check.passed) {
+    hyperMind.recordLog(
+      'Hyper-Compliance & HyperScanner',
+      `Blocked non-compliant payload: ${check.violations.map((v) => `${v.category} ("${v.keyword}")`).join(', ')}`,
+      'blocked',
+    );
+    appendAudit('RibaGuard', 'HYPER_COMPLIANCE_BLOCK', 'rejected', check.reason);
+  }
+
+  res.status(check.passed ? 200 : 403).json({
+    passed: check.passed,
+    violations: check.violations,
+    reason: check.reason,
+    snapshot: buildSnapshot(),
+  });
+});
+
+// Hyper-Intelligence E: Manual or automatic Self-Healing trigger
+app.post('/api/hyper/self-heal', (_req: Request, res: Response) => {
+  const healedCount = hyperMind.selfHeal(state.oracleNodes);
+  appendAudit(
+    'Oracle',
+    'SELF_HEAL',
+    'accepted',
+    `Self-Healing Network AI restored ${healedCount} oracle node(s) to $3.14 Nova Peg.`,
+  );
+  res.json({ healedCount, snapshot: buildSnapshot() });
+});
+
+// Hyper-Intelligence F: Predictive Governance AI
+app.post('/api/hyper/governance/predict', (req: Request, res: Response) => {
+  const proposal = String(req.body?.proposal || 'Adjust $3.14 Nova Peg to $3.20').trim();
+  const prediction = hyperMind.predictGovernanceVote(proposal);
+  appendAudit('Governor', 'PREDICT_VOTE', 'info', prediction.summary);
+  res.json({
+    ...prediction,
+    snapshot: buildSnapshot(),
+  });
+});
+
 // RibaGuard AI verification endpoint
 app.post('/api/riba/check', (req: Request, res: Response) => {
   const memo = String(req.body?.memo || '');
   const spec = String(req.body?.spec || '');
-  const ribaCheck = detectRibaViolation(`${memo} ${spec}`);
-  if (ribaCheck.isRiba) {
+  const check = hyperMind.scanCompliance({ memo, spec });
+  const hasRiba = check.violations.some((v) => v.category === 'Riba');
+  if (hasRiba) {
     res.json({
       isRiba: true,
       reason: 'RibaGuard AI: Riba / Interest detected - Transaction rejected. Stellar Nova Core is 0% Interest.',
@@ -422,6 +390,7 @@ app.get('/api/insights/health', (_req: Request, res: Response) => {
       score: state.aiHealthScore / 100,
       risk: state.complianceBreached ? 'critical' : 'low',
       mainnetLaunched: state.mainnetLaunched,
+      networkHealth: hyperMind.networkHealth,
     },
   });
 });
@@ -461,7 +430,7 @@ app.get('/api/bridge/status/:coinId', (req: Request, res: Response) => {
   });
 });
 
-// NovaStablecoinManager + AHI AI + RibaGuard AI + NovaValuePolicy + NovaPurityEnforcer
+// NovaStablecoinManager + NovaHyperMind + AHI AI + RibaGuard AI + NovaValuePolicy + NovaPurityEnforcer
 function handleNovaTransaction(req: Request, res: Response) {
   const sender = String(req.body?.sender || 'NVC-USER-LOCAL').trim();
   const recipient = String(req.body?.recipient || '').trim();
@@ -478,16 +447,18 @@ function handleNovaTransaction(req: Request, res: Response) {
     return;
   }
 
-  const verdict = evaluateWithAhiAi({
+  const analysis = hyperMind.analyzeTransaction({
     sender,
     recipient,
+    amount,
     source,
     memo,
     reportedValueUsd,
+    existingTransactions: state.transactions,
   });
 
-  if (!verdict.accepted) {
-    if (verdict.reason.includes('Anti-Gambling')) {
+  if (!analysis.isSafe) {
+    if (analysis.violationType === 'gambling' || analysis.violationType === 'riba') {
       state.unethicalIncidents += 1;
       state.aiHealthScore = Math.max(70, state.aiHealthScore - 0.8);
     } else {
@@ -497,7 +468,7 @@ function handleNovaTransaction(req: Request, res: Response) {
     state.aiHealthScore = Math.min(100, state.aiHealthScore + 0.1);
   }
 
-  const status: 'accepted' | 'rejected' = verdict.accepted ? 'accepted' : 'rejected';
+  const status: 'accepted' | 'rejected' = analysis.isSafe ? 'accepted' : 'rejected';
   const timestamp = new Date().toISOString();
   const tx: NovaTransaction = {
     id: `tx-nvc-${Date.now().toString(36)}`,
@@ -509,15 +480,18 @@ function handleNovaTransaction(req: Request, res: Response) {
     memo: memo || 'NVC settlement',
     reportedValueUsd,
     status,
-    reason: verdict.reason,
-    ribaRejected: verdict.ribaRejected,
-    purityScore: verdict.purityScore,
+    reason: analysis.reason,
+    ribaRejected: analysis.violationType === 'riba',
+    gamblingRejected: analysis.violationType === 'gambling',
+    exchangeRejected: analysis.violationType === 'exchange',
+    riskScore: analysis.riskScore,
+    purityScore: analysis.purityScore,
     hash: sha256({ sender, recipient, amount, source, memo, reportedValueUsd, timestamp }),
     timestamp,
   };
 
   state.transactions.unshift(tx);
-  if (verdict.ribaRejected) {
+  if (analysis.violationType === 'riba') {
     appendAudit(
       'RibaGuard',
       'REJECT_RIBA',
@@ -535,6 +509,7 @@ function handleNovaTransaction(req: Request, res: Response) {
 
   res.status(status === 'accepted' ? 201 : 403).json({
     transaction: tx,
+    analysis,
     snapshot: buildSnapshot(),
   });
 }
@@ -542,31 +517,60 @@ function handleNovaTransaction(req: Request, res: Response) {
 app.post('/api/nova/transaction', handleNovaTransaction);
 app.post('/api/pi/transaction', handleNovaTransaction);
 
-// AutonomousAppBuilder endpoint (NVC-exclusive, zero gambling, zero riba)
+// AutonomousAppBuilder endpoint (HyperScanner + RibaGuard AI + Anti-Gambling + NVC-only)
 app.post('/api/apps/generate', (req: Request, res: Response) => {
   const name = String(req.body?.name || '').trim();
   const category = String(req.body?.category || 'Commerce').trim();
   const description = String(req.body?.description || '').trim();
   const paymentAsset = String(req.body?.paymentAsset || 'NVC').trim().toUpperCase();
+  const creator = String(req.body?.creator || 'NVC-BUILDER-LOCAL').trim();
 
   if (!name || !description) {
     res.status(400).json({ error: 'App name and description are required.' });
     return;
   }
 
-  const gamblingHit = containsGamblingKeyword(`${name} ${category} ${description}`);
-  const ribaHit = detectRibaViolation(`${name} ${category} ${description}`);
-  let status: NovaAppRecord['status'] = 'deployed';
-  let complianceReason = 'Passed AHI AI anti-gambling, RibaGuard AI (0% interest), and NVC-exclusivity verification.';
+  if (hyperMind.bannedCreators.has(creator)) {
+    res.status(403).json({
+      error: `Creator "${creator}" is permanently banned by Anti-Scam HyperScanner.`,
+      snapshot: buildSnapshot(),
+    });
+    return;
+  }
 
-  if (gamblingHit) {
+  const scan = hyperMind.scanCompliance({ memo: name, spec: description, category });
+  let status: NovaAppRecord['status'] = 'deployed';
+  let complianceReason =
+    'Passed AHI AI, HyperScanner (0 Scams), RibaGuard AI (0% interest), and NVC-exclusivity verification.';
+
+  const hasScam = scan.violations.some((v) => v.category === 'Scam / Rug');
+  const hasRiba = scan.violations.some((v) => v.category === 'Riba');
+  const hasGambling = scan.violations.some((v) => v.category === 'Maysir (Gambling)');
+  const hasGharar = scan.violations.some((v) => v.category === 'Gharar');
+
+  if (hasScam) {
     status = 'rejected';
-    complianceReason = `Rejected by NovaPurityEnforcer: gambling keyword "${gamblingHit}" violates no-gambling mandate.`;
+    complianceReason = `Anti-Scam HyperScanner: Scam / rug pattern detected. App rejected & creator "${creator}" permanently banned.`;
+    hyperMind.bannedCreators.add(creator);
+    hyperMind.recordLog(
+      'Anti-Scam HyperScanner',
+      `Blocked Scam App — "${name}" flagged; creator ${creator} permanently banned.`,
+      'blocked',
+    );
     state.unethicalIncidents += 1;
-  } else if (ribaHit.isRiba) {
+  } else if (hasGambling) {
+    status = 'rejected';
+    const kw = scan.violations.find((v) => v.category === 'Maysir (Gambling)')?.keyword || 'gambling';
+    complianceReason = `Rejected by NovaPurityEnforcer: gambling keyword "${kw}" violates no-gambling mandate.`;
+    state.unethicalIncidents += 1;
+  } else if (hasRiba) {
     status = 'rejected';
     complianceReason =
       'RibaGuard AI: App rejected - Contains Riba model. Only profit-sharing / fee-based / real trade allowed.';
+    state.unethicalIncidents += 1;
+  } else if (hasGharar) {
+    status = 'rejected';
+    complianceReason = scan.reason;
     state.unethicalIncidents += 1;
   } else if (paymentAsset !== 'NVC') {
     status = 'rejected';
@@ -578,6 +582,7 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
     name,
     category,
     description,
+    creator,
     status,
     complianceReason,
     manifestSnippet:
@@ -588,8 +593,10 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
   };
 
   state.apps.unshift(appRecord);
-  if (ribaHit.isRiba) {
+  if (hasRiba) {
     appendAudit('RibaGuard', 'REJECT_RIBA', 'rejected', `${name}: ${complianceReason}`);
+  } else if (hasScam) {
+    appendAudit('HyperMind', 'BAN_SCAM_CREATOR', 'rejected', `${name} (${creator}): ${complianceReason}`);
   } else {
     appendAudit(
       'Nova',
@@ -621,7 +628,7 @@ app.post('/api/apps/:id/halt', (req: Request, res: Response) => {
   res.json({ app: target, snapshot: buildSnapshot() });
 });
 
-// Global NOVA Oracle Compliance Verifier: Deviation flags node for community vote
+// Global NOVA Oracle Compliance Verifier + Predictive Shield + Stabilizer
 app.post('/api/oracle/verify', (req: Request, res: Response) => {
   const nodeId = String(req.body?.nodeId || '').trim();
   const reportedValueUsd = Number(req.body?.reportedValueUsd);
@@ -637,12 +644,22 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
 
   if (!isValidNovaValue(reportedValueUsd)) {
     node.status = 'flagged';
+    hyperMind.recordLog(
+      'Hyper-Economic Stabilizer',
+      `Oracle ${node.id} reported $${reportedValueUsd.toFixed(2)} (!= $3.14). Flagged for community vote; stabilization proposal created.`,
+      'predicted',
+    );
     appendAudit(
       'Oracle',
       'NODE_FLAGGED_FOR_VOTE',
       'rejected',
       `Oracle ${node.id} reported $${reportedValueUsd.toFixed(2)} (!= $${NovaPolicy.fixedValueUsd}) and was flagged for community vote.`,
     );
+    // Check for multi-node collusion via Oracle Predictive Shield
+    const shield = hyperMind.predictMarketAttack(state.oracleNodes, false);
+    if (shield.selfHealed) {
+      appendAudit('Oracle', 'PREDICTIVE_SHIELD_SELF_HEAL', 'accepted', `${shield.status}: ${shield.predictedAttack}`);
+    }
   } else {
     node.status = 'verified';
     appendAudit(

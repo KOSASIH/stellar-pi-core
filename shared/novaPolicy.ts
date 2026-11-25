@@ -8,6 +8,7 @@ export const NovaPolicy = {
   networkValueAtPegUsd: 314_000_000_000,
   collateralRatio: 1.5,
   micronNovaPerNvc: 1_000_000,
+  maxWalletHoldingNvc: 10_000_000, // 0.01% of 100B NVC total supply
   transactionFeeUsd: 0.001,
   blockTimeSec: 5,
   consensus: 'Stellar Consensus Protocol (SCP)',
@@ -20,7 +21,17 @@ export const NovaPolicy = {
   shariaCompliant: 'Halal - Riba-Free - Gharar-Free',
   allowedSources: ['mining', 'contribution_rewards', 'p2p', 'marketplace', 'app'] as const,
   blacklistedSources: ['exchange', 'bought'] as const,
-  gamblingKeywords: ['casino', 'gambling', 'betting', 'jackpot', 'slot', 'poker', 'lottery'] as const,
+  gamblingKeywords: [
+    'bet',
+    'casino',
+    'gambling',
+    'betting',
+    'jackpot',
+    'slot',
+    'poker',
+    'lottery',
+    'prediction market gambling',
+  ] as const,
   ribaKeywords: [
     'interest',
     'riba',
@@ -38,6 +49,24 @@ export const NovaPolicy = {
     'leverage',
     'margin interest',
     'rentenir',
+  ] as const,
+  ghararKeywords: [
+    'leverage 100x',
+    'futures',
+    'options gambling',
+    'mystery box',
+    'loot box gambling',
+  ] as const,
+  scamKeywords: [
+    'guaranteed profit',
+    'double your money',
+    '1000x',
+    'presale',
+    'pump',
+    'rug',
+    'honeypot',
+    'private key',
+    'seed phrase',
   ] as const,
   bannedFinancialModels: [
     'lending_with_interest',
@@ -80,6 +109,9 @@ export interface NovaTransaction {
   status: 'accepted' | 'rejected';
   reason: string;
   ribaRejected?: boolean;
+  gamblingRejected?: boolean;
+  exchangeRejected?: boolean;
+  riskScore?: number;
   purityScore: number;
   hash: string;
   timestamp: string;
@@ -90,6 +122,7 @@ export interface NovaAppRecord {
   name: string;
   category: string;
   description: string;
+  creator?: string;
   status: 'deployed' | 'rejected' | 'halted';
   complianceReason: string;
   manifestSnippet: string;
@@ -125,13 +158,38 @@ export interface AuditEntry {
   timestamp: string;
 }
 
+export interface HyperModuleCard {
+  id: string;
+  name: string;
+  status: 'Active';
+  threatsBlocked: number;
+  health: number;
+  description: string;
+}
+
+export interface HyperMindLogEntry {
+  id: string;
+  module: string;
+  decision: string;
+  severity: 'blocked' | 'healed' | 'predicted' | 'info';
+  timestamp: string;
+}
+
 export interface EcosystemSnapshot {
   constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
   complianceBreached: boolean;
   aiHealthScore: number;
   unethicalIncidents: number;
+  hyperMindStatus: 'Active';
+  threatsBlocked: number;
+  networkHealth: number;
+  whaleProof: boolean;
+  scamBlocked: number;
   ribaBlockedTransactions: number;
+  gamblingBlocked: number;
+  exchangeBlocked: number;
+  stabilizerStatus: string;
   ribaPolicy: string;
   rules: GovernanceRules;
   metrics: {
@@ -146,4 +204,7 @@ export interface EcosystemSnapshot {
   apps: NovaAppRecord[];
   oracleNodes: OracleNode[];
   auditLog: AuditEntry[];
+  hyperModules: HyperModuleCard[];
+  hyperMindLog: HyperMindLogEntry[];
+  bannedCreators: string[];
 }

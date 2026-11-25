@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["client/src", "server.ts", "shared"]
+  "include": ["client/src", "server.ts", "server", "shared"]
 }

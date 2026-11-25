@@ -3,16 +3,22 @@ import {
   Activity,
   AlertTriangle,
   AppWindow,
+  Bot,
+  Brain,
   CheckCircle2,
   Cpu,
+  Eye,
   Globe2,
   Lock,
+  Network,
   Power,
   Rocket,
   Scale,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import {
   formatMicronNova,
@@ -24,7 +30,7 @@ import {
   type NovaTransaction,
 } from '../../shared/novaPolicy.ts';
 
-type TabId = 'transactions' | 'apps' | 'oracle' | 'audit';
+type TabId = 'transactions' | 'apps' | 'oracle' | 'audit' | 'hyper';
 
 function SupernovaIcon() {
   return (
@@ -42,6 +48,25 @@ function SupernovaIcon() {
       <circle cx="12" cy="12" r="2.6" className="fill-amber-200" />
     </svg>
   );
+}
+
+function getHyperModuleIcon(id: string) {
+  switch (id) {
+    case 'oracle-shield':
+      return Eye;
+    case 'whale-sybil-guard':
+      return Shield;
+    case 'scam-hyperscanner':
+      return Bot;
+    case 'hyper-compliance':
+      return ShieldCheck;
+    case 'self-healing-network':
+      return Network;
+    case 'predictive-governance':
+      return Brain;
+    default:
+      return Lock;
+  }
 }
 
 export default function App() {
@@ -65,6 +90,10 @@ export default function App() {
   const [appDescription, setAppDescription] = useState('');
   const [paymentAsset, setPaymentAsset] = useState('NVC');
   const [submittingApp, setSubmittingApp] = useState(false);
+
+  // Predictive Governance AI state
+  const [proposalText, setProposalText] = useState('Allow external exchange price drift to $3.20');
+  const [votePrediction, setVotePrediction] = useState<string | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -108,7 +137,7 @@ export default function App() {
       if (res.ok) {
         setFeedback({
           kind: 'success',
-          text: `Transaction ${data.transaction.id} (${data.transaction.amount} NVC = ${formatUsd(nvcToUsd(data.transaction.amount))} USD · ${formatMicronNova(data.transaction.amount)}) accepted by AHI AI.`,
+          text: `Transaction ${data.transaction.id} (${data.transaction.amount} NVC = ${formatUsd(nvcToUsd(data.transaction.amount))} USD · ${formatMicronNova(data.transaction.amount)}) accepted by HyperMind & AHI AI.`,
         });
       } else {
         setFeedback({
@@ -204,6 +233,77 @@ export default function App() {
     });
   }
 
+  async function handleSimulateWhaleAttack() {
+    setFeedback(null);
+    const res = await fetch('/api/hyper/whale-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet: '0xWHALE-ACCUMULATOR-X',
+        amount: 20_000_000,
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setFeedback({
+      kind: data.allowed ? 'success' : 'error',
+      text: data.reason,
+    });
+  }
+
+  async function handleSimulateScamApp() {
+    setFeedback(null);
+    const res = await fetch('/api/hyper/compliance-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        memo: '',
+        spec: 'Double your money 1000x presale',
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setFeedback({
+      kind: data.passed ? 'success' : 'error',
+      text: data.reason,
+    });
+  }
+
+  async function handleSimulateOracleManipulation() {
+    setFeedback(null);
+    const res = await fetch('/api/hyper/oracle-shield?simulate=true');
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setFeedback({
+      kind: 'success',
+      text: `${data.status}: ${data.predictedAttack}. Nodes restored to $3.14.`,
+    });
+  }
+
+  async function handlePredictGovernance(e: FormEvent) {
+    e.preventDefault();
+    const res = await fetch('/api/hyper/governance/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal: proposalText }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setVotePrediction(
+      `${data.summary} (Yes: ${data.predictedYes}% · No: ${data.predictedNo}% · Confidence: ${data.confidence}%)`,
+    );
+  }
+
+  async function handleSelfHealNetwork() {
+    const res = await fetch('/api/hyper/self-heal', { method: 'POST' });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setFeedback({
+      kind: 'success',
+      text: `Self-Healing Network AI verified 99.99% uptime (${data.healedCount} oracle node(s) restored to $3.14).`,
+    });
+  }
+
   if (loading || !snapshot) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
@@ -232,9 +332,21 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <Brain className="w-3.5 h-3.5" />
+              Hyper-Intelligence: ACTIVE
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <Zap className="w-3.5 h-3.5" />
+              Self-Healing: ON
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30">
+              <Shield className="w-3.5 h-3.5" />
+              Whale-Proof: ON
+            </span>
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
                 snapshot.mainnetLaunched
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
@@ -243,7 +355,7 @@ export default function App() {
               <Rocket className="w-3.5 h-3.5" />
               {snapshot.mainnetLaunched ? 'Mainnet Active' : 'Governor Pre-Launch'}
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
               1 NVC = {formatUsd(constants.fixedValueUsd)}
             </span>
@@ -319,7 +431,7 @@ export default function App() {
               {metrics.activeApps}
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              Anti-gambling rule: {snapshot.rules.noGambling}
+              HyperScanner: 0 Scams Passed
             </p>
           </div>
 
@@ -332,7 +444,7 @@ export default function App() {
               {snapshot.aiHealthScore}%
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              {metrics.verifiedOracleNodes} verified · {metrics.isolatedOracleNodes} flagged nodes
+              Network Health: {snapshot.networkHealth}% - Self-Healing Active
             </p>
           </div>
 
@@ -345,7 +457,7 @@ export default function App() {
               {snapshot.ribaBlockedTransactions} blocked
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              Halal - No Interest - No APY
+              Stabilizer: {snapshot.stabilizerStatus}
             </p>
           </div>
         </section>
@@ -358,6 +470,7 @@ export default function App() {
               { id: 'apps', label: 'Autonomous App Builder', icon: AppWindow },
               { id: 'oracle', label: 'Oracle & Mainnet Governor', icon: Globe2 },
               { id: 'audit', label: 'Immutable Audit Trail', icon: ShieldCheck },
+              { id: 'hyper', label: 'Hyper-Intelligence', icon: Brain },
             ] as const
           ).map((tab) => {
             const Icon = tab.icon;
@@ -392,7 +505,7 @@ export default function App() {
                   Submit NVC Stablecoin Transaction
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Screened in real time by AHI AI, NovaValuePolicy, NovaPurityEnforcer, and RibaGuard AI. 1 NVC = {constants.micronNovaPerNvc.toLocaleString()} Micron Nova.
+                  Screened in real time by NovaHyperMind, AHI AI, NovaValuePolicy, NovaPurityEnforcer, and RibaGuard AI.
                 </p>
               </div>
 
@@ -613,10 +726,10 @@ export default function App() {
                   Autonomous App Builder
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Generates Nova-exclusive internal applications. Gambling and non-NVC assets are strictly blocked.
+                  Screened by Anti-Scam HyperScanner, RibaGuard AI, and NovaPurityEnforcer.
                 </p>
                 <p className="text-xs text-amber-300/90 mt-1.5">
-                  Forbidden: Lending with interest, Staking APY, Yield Farming, Leverage
+                  Forbidden: Lending with interest, Staking APY, Yield Farming, Leverage, Rug/Scam Specs
                 </p>
               </div>
 
@@ -693,6 +806,11 @@ export default function App() {
                   Test Riba App
                 </button>
               </div>
+
+              <div className="rounded-lg border border-sky-800/40 bg-sky-950/20 px-3 py-2 text-xs text-sky-300 flex items-center justify-between gap-2">
+                <span>HyperScanner: 0 Scams Passed</span>
+                <span className="tabular-nums font-medium">{snapshot.scamBlocked} blocked</span>
+              </div>
             </form>
 
             <div className="lg:col-span-7 space-y-3">
@@ -745,13 +863,18 @@ export default function App() {
         {activeTab === 'oracle' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-              <div>
-                <h2 className="text-base font-semibold text-white">
-                  Global NOVA Oracle Compliance Verifier
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Nodes reporting any value other than $3.14 are flagged for community vote.
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    Global NOVA Oracle Compliance Verifier
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Nodes reporting any value other than $3.14 are flagged for community vote.
+                  </p>
+                </div>
+                <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                  Stabilizer: {snapshot.stabilizerStatus} - External Volatility BLOCKED
+                </span>
               </div>
 
               <div className="space-y-3">
@@ -901,6 +1024,175 @@ export default function App() {
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: Hyper-Intelligence Command Center */}
+        {activeTab === 'hyper' && (
+          <div className="space-y-6">
+            {/* Command Center Banner + 3 Simulation Controls */}
+            <div className="rounded-xl border border-amber-500/30 bg-slate-900 p-5 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-amber-400" />
+                  <h2 className="text-base font-semibold text-white">
+                    Hyper-Intelligence Command Center (NovaHyperMind)
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Total Threats Blocked:{' '}
+                  <span className="text-amber-300 font-semibold tabular-nums">
+                    {snapshot.threatsBlocked.toLocaleString()}
+                  </span>{' '}
+                  · Network Health: {snapshot.networkHealth}% - Self-Healing Active · Stabilizer:{' '}
+                  {snapshot.stabilizerStatus} - External Volatility BLOCKED
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSimulateWhaleAttack}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-200 text-xs font-medium"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  Simulate Whale Attack
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSimulateScamApp}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-200 text-xs font-medium"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  Simulate Scam App
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSimulateOracleManipulation}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-200 text-xs font-medium"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Simulate Oracle Manipulation
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelfHealNetwork}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-medium"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  Trigger Self-Heal
+                </button>
+              </div>
+            </div>
+
+            {/* 7 Hyper-Intelligence AI Module Cards */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {snapshot.hyperModules.map((mod) => {
+                const Icon = getHyperModuleIcon(mod.id);
+                return (
+                  <div
+                    key={mod.id}
+                    className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-amber-400 shrink-0" />
+                        <h3 className="text-sm font-semibold text-white">{mod.name}</h3>
+                      </div>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-medium">
+                        {mod.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">{mod.description}</p>
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs tabular-nums">
+                      <span className="text-slate-400">
+                        Blocked: <strong className="text-white">{mod.threatsBlocked.toLocaleString()}</strong>
+                      </span>
+                      <span className="text-emerald-300 font-medium">Health: {mod.health}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+
+            {/* HyperMind Live Log + Predictive Governance AI */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Network className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-base font-semibold text-white">HyperMind Live Log</h3>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {snapshot.hyperMindLog.length} autonomous decisions
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                  {snapshot.hyperMindLog.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`rounded-lg border p-3 text-xs ${
+                        entry.severity === 'blocked'
+                          ? 'border-rose-800/40 bg-rose-950/20'
+                          : entry.severity === 'healed'
+                            ? 'border-emerald-800/40 bg-emerald-950/20'
+                            : 'border-amber-800/40 bg-amber-950/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-amber-300">{entry.module}</span>
+                        <span className="text-slate-500">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-200">{entry.decision}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
+                <div>
+                  <h3 className="text-base font-semibold text-white">
+                    Predictive Governance AI (1 Person = 1 Vote)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Whale-proof voting predictor powered by Citizen KYC & Reputation Score.
+                  </p>
+                </div>
+
+                <form onSubmit={handlePredictGovernance} className="space-y-3">
+                  <label className="block text-xs text-slate-300 space-y-1">
+                    <span>Proposal to Forecast</span>
+                    <input
+                      type="text"
+                      value={proposalText}
+                      onChange={(e) => setProposalText(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
+                      required
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2"
+                  >
+                    Predict Community Decision
+                  </button>
+                </form>
+
+                {votePrediction && (
+                  <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-xs text-amber-200">
+                    {votePrediction}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800 text-xs text-slate-400 space-y-1">
+                  <p>HyperScanner: 0 Scams Passed ({snapshot.scamBlocked} scam specs blocked)</p>
+                  <p>Banned Scam Creators: {snapshot.bannedCreators.join(', ')}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
