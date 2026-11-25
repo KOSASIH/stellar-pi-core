@@ -162,6 +162,20 @@ export class NovaHyperMind {
     }
   }
 
+  private keywordMatches(text: string, kw: string): boolean {
+    if (kw === 'slot') {
+      return /\bslots?\b/.test(text) && !/\b(freight|delivery|time|pickup|shipping|logistics)\s+slot\b/.test(text);
+    }
+    if (kw === 'pump') {
+      return /\bpump\s*(and|&|n)?\s*dump\b|\b(price|token|coin|crypto)\s+pump\b/.test(text);
+    }
+    if (kw === 'rug') {
+      return /\brug\s*pull\b|\brugpull\b/.test(text);
+    }
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+  }
+
   public scanCompliance(input: {
     memo?: string;
     spec?: string;
@@ -177,7 +191,7 @@ export class NovaHyperMind {
     const violations: ComplianceViolation[] = [];
 
     for (const kw of [...NovaPolicy.ribaKeywords, 'lending', 'yield farming', 'usury']) {
-      if (combined.includes(kw)) {
+      if (this.keywordMatches(combined, kw)) {
         violations.push({
           category: 'Riba',
           keyword: kw,
@@ -189,7 +203,7 @@ export class NovaHyperMind {
     }
 
     for (const kw of NovaPolicy.ghararKeywords) {
-      if (combined.includes(kw)) {
+      if (this.keywordMatches(combined, kw)) {
         violations.push({
           category: 'Gharar',
           keyword: kw,
@@ -201,7 +215,7 @@ export class NovaHyperMind {
     }
 
     for (const kw of NovaPolicy.gamblingKeywords) {
-      if (combined.includes(kw)) {
+      if (this.keywordMatches(combined, kw)) {
         violations.push({
           category: 'Maysir (Gambling)',
           keyword: kw,
@@ -213,7 +227,7 @@ export class NovaHyperMind {
     }
 
     for (const kw of NovaPolicy.scamKeywords) {
-      if (combined.includes(kw)) {
+      if (this.keywordMatches(combined, kw)) {
         violations.push({
           category: 'Scam / Rug',
           keyword: kw,

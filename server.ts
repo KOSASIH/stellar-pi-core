@@ -6,27 +6,27 @@ import type { Request, Response } from 'express';
 import {
   NovaPolicy,
   isValidNovaValue,
+  nvcToUsd,
   type AuditEntry,
   type CitizenAccount,
   type CollateralReserveItem,
   type EcosystemSnapshot,
   type GovernanceProposal,
   type GovernanceRules,
+  type MarketplaceListing,
+  type MarketplaceOrder,
   type NovaAppRecord,
   type NovaTransaction,
   type OracleNode,
 } from './shared/novaPolicy.ts';
 import { NovaHyperMind } from './server/hypermind.ts';
+import { clearPersistedData, loadPersistedData, savePersistedData } from './server/storage.ts';
 
 function sha256(payload: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
-const hyperMind = new NovaHyperMind();
-const nowMs = Date.now();
-
-// In-memory state with realistic NVC seed data: 3 oracle nodes, 3 apps, 3 transactions, 5 audit logs
-const state: {
+interface EcosystemState {
   mainnetLaunched: boolean;
   complianceBreached: boolean;
   aiHealthScore: number;
@@ -39,21 +39,27 @@ const state: {
   citizens: CitizenAccount[];
   proposals: GovernanceProposal[];
   collateralReserves: CollateralReserveItem[];
-} = {
-  mainnetLaunched: false,
-  complianceBreached: false,
-  aiHealthScore: 99.4,
-  unethicalIncidents: 0,
-  rules: {
-    novaExclusivity: NovaPolicy.novaExclusivity,
-    ethicalAi: NovaPolicy.ethicalAi,
-    founderAccountability: NovaPolicy.founderAccountability,
-    volatileRejection: 'Community Vote',
-    noGambling: NovaPolicy.noGambling,
-    noRiba: '0% Interest',
-    shariaCompliant: NovaPolicy.shariaCompliant,
-    evolutionThreshold: 10,
-  },
+  marketplaceListings: MarketplaceListing[];
+  marketplaceOrders: MarketplaceOrder[];
+}
+
+function createInitialState(): EcosystemState {
+  const nowMs = Date.now();
+  return {
+    mainnetLaunched: false,
+    complianceBreached: false,
+    aiHealthScore: 99.4,
+    unethicalIncidents: 0,
+    rules: {
+      novaExclusivity: NovaPolicy.novaExclusivity,
+      ethicalAi: NovaPolicy.ethicalAi,
+      founderAccountability: NovaPolicy.founderAccountability,
+      volatileRejection: 'Community Vote',
+      noGambling: NovaPolicy.noGambling,
+      noRiba: '0% Interest',
+      shariaCompliant: NovaPolicy.shariaCompliant,
+      evolutionThreshold: 10,
+    },
   transactions: [
     {
       id: 'tx-nvc-001',
@@ -276,11 +282,71 @@ const state: {
       lastAuditedAt: new Date(nowMs - 1000 * 60 * 60).toISOString(),
     },
   ],
-};
-
-for (const c of state.citizens) {
-  hyperMind.registerCitizenDevice(c.id, c.deviceFingerprint);
+  marketplaceListings: [
+    {
+      id: 'mkt-solar-kit',
+      title: 'Off-Grid 1.2kW Solar Microgrid Kit',
+      merchantId: 'NVC-MERCHANT-HUB-07',
+      merchantName: 'Helios Clean Energy Co-op',
+      category: 'Clean Energy',
+      priceNvc: 42.5,
+      description: 'Direct hardware trade settled in fixed $3.14 NVC with zero financing interest.',
+      settlementModel: 'Direct Real Trade',
+      stock: 18,
+      soldCount: 6,
+      halalVerified: true,
+      createdAt: new Date(nowMs - 1000 * 60 * 50).toISOString(),
+    },
+    {
+      id: 'mkt-grain-lot',
+      title: 'Organic Rice & Grain Wholesale Lot (100kg)',
+      merchantId: 'NVC-OPEN-MARKET-02',
+      merchantName: 'Nusantara Farmers Guild',
+      category: 'Physical Goods',
+      priceNvc: 18.25,
+      description: 'Farm-to-market staple food contract priced transparently in NVC & Micron Nova.',
+      settlementModel: 'Direct Real Trade',
+      stock: 44,
+      soldCount: 19,
+      halalVerified: true,
+      createdAt: new Date(nowMs - 1000 * 60 * 38).toISOString(),
+    },
+    {
+      id: 'mkt-cold-logistics',
+      title: 'Cross-Province Cold-Chain Freight Slot',
+      merchantId: 'NVC-LOGISTICS-04',
+      merchantName: 'Nova Logistics Collective',
+      category: 'Logistics',
+      priceNvc: 8.5,
+      description: 'Transparent flat fee logistics slot; zero hidden charges or late penalty interest.',
+      settlementModel: 'Fee-Based Service',
+      stock: 30,
+      soldCount: 11,
+      halalVerified: true,
+      createdAt: new Date(nowMs - 1000 * 60 * 24).toISOString(),
+    },
+    {
+      id: 'mkt-mudarabah-bakery',
+      title: 'Halal Artisan Bakery Co-op Mudarabah Unit',
+      merchantId: 'NVC-CITIZEN-EU-21',
+      merchantName: 'Crescent Grain Bakery Guild',
+      category: 'Halal Mudarabah',
+      priceNvc: 25,
+      description: '70/30 real-economy profit-sharing partnership (0% interest, shared operational risk).',
+      settlementModel: 'Mudarabah Profit-Share (0% Interest)',
+      stock: 12,
+      soldCount: 4,
+      halalVerified: true,
+      createdAt: new Date(nowMs - 1000 * 60 * 15).toISOString(),
+    },
+  ],
+  marketplaceOrders: [],
+  };
 }
+
+let hyperMind = new NovaHyperMind();
+let state: EcosystemState = createInitialState();
+let isReadyToPersist = false;
 
 function appendAudit(moduleName: string, action: string, verdict: AuditEntry['verdict'], detail: string, offsetMs = 0) {
   const timestamp = new Date(Date.now() - offsetMs).toISOString();
@@ -297,44 +363,96 @@ function appendAudit(moduleName: string, action: string, verdict: AuditEntry['ve
   if (state.auditLog.length > 100) {
     state.auditLog.pop();
   }
+  if (isReadyToPersist) {
+    persistNow();
+  }
 }
 
-// Seed 5 immutable audit log entries using Nova, RibaGuard, Oracle, Governor
-appendAudit(
-  'Nova',
-  'BOOT_SEQUENCE',
-  'info',
-  'Initialized Stellar Nova Core + NovaHyperMind on SCP consensus with 100B NVC supply and 1.5x collateral target.',
-  1000 * 60 * 30,
-);
-appendAudit(
-  'Nova',
-  'PEG_IDENTITY_LOCK',
-  'accepted',
-  'NovaValuePolicy & Stabilizer locked mathematical identity: 1 NVC = $3.14 USD (1,000,000 Micron Nova per NVC).',
-  1000 * 60 * 24,
-);
-appendAudit(
-  'Nova',
-  'TX_ACCEPTED',
-  'accepted',
-  'tx-nvc-001 & tx-nvc-002 verified for pure mining/contribution_rewards NVC origins.',
-  1000 * 60 * 11,
-);
-appendAudit(
-  'RibaGuard',
-  'POLICY_ARMED',
-  'info',
-  'Hyper-Compliance & RibaGuard AI active: 0% Interest, Gambling-Free, Gharar-Free, Scam-Free.',
-  1000 * 60 * 5,
-);
-appendAudit(
-  'Oracle',
-  'CONSENSUS_SYNC',
-  'accepted',
-  'Oracle Predictive Shield verified 3-region quorum (ORACLE-US-01, ORACLE-ID-01, ORACLE-EU-01) at $3.14.',
-  1000 * 30,
-);
+function seedInitialAuditAndDevices() {
+  for (const c of state.citizens) {
+    hyperMind.registerCitizenDevice(c.id, c.deviceFingerprint);
+  }
+  if (state.auditLog.length === 0) {
+    appendAudit(
+      'Nova',
+      'BOOT_SEQUENCE',
+      'info',
+      'Initialized Stellar Nova Core + NovaHyperMind on SCP consensus with 100B NVC supply and 1.5x collateral target.',
+      1000 * 60 * 30,
+    );
+    appendAudit(
+      'Nova',
+      'PEG_IDENTITY_LOCK',
+      'accepted',
+      'NovaValuePolicy & Stabilizer locked mathematical identity: 1 NVC = $3.14 USD (1,000,000 Micron Nova per NVC).',
+      1000 * 60 * 24,
+    );
+    appendAudit(
+      'Nova',
+      'TX_ACCEPTED',
+      'accepted',
+      'tx-nvc-001 & tx-nvc-002 verified for pure mining/contribution_rewards NVC origins.',
+      1000 * 60 * 11,
+    );
+    appendAudit(
+      'RibaGuard',
+      'POLICY_ARMED',
+      'info',
+      'Hyper-Compliance & RibaGuard AI active: 0% Interest, Gambling-Free, Gharar-Free, Scam-Free.',
+      1000 * 60 * 5,
+    );
+    appendAudit(
+      'Oracle',
+      'CONSENSUS_SYNC',
+      'accepted',
+      'Oracle Predictive Shield verified 3-region quorum (ORACLE-US-01, ORACLE-ID-01, ORACLE-EU-01) at $3.14.',
+      1000 * 30,
+    );
+  }
+}
+
+function hydrateFromPersistence() {
+  const persisted = loadPersistedData();
+  if (persisted) {
+    const defaults = createInitialState();
+    state = {
+      ...defaults,
+      ...persisted.state,
+      marketplaceListings: persisted.state.marketplaceListings?.length
+        ? persisted.state.marketplaceListings
+        : defaults.marketplaceListings,
+      marketplaceOrders: persisted.state.marketplaceOrders || [],
+    };
+    hyperMind.threatsBlocked = persisted.hyperMind.threatsBlocked ?? hyperMind.threatsBlocked;
+    hyperMind.scamBlocked = persisted.hyperMind.scamBlocked ?? hyperMind.scamBlocked;
+    hyperMind.networkHealth = persisted.hyperMind.networkHealth ?? hyperMind.networkHealth;
+    hyperMind.bannedCreators = new Set(persisted.hyperMind.bannedCreators || ['0xRUG-DEV-99']);
+    if (Array.isArray(persisted.hyperMind.modules) && persisted.hyperMind.modules.length === 7) {
+      hyperMind.modules = persisted.hyperMind.modules;
+    }
+    if (Array.isArray(persisted.hyperMind.liveLog) && persisted.hyperMind.liveLog.length > 0) {
+      hyperMind.liveLog = persisted.hyperMind.liveLog;
+    }
+  }
+  seedInitialAuditAndDevices();
+}
+
+function persistNow() {
+  savePersistedData({
+    state,
+    hyperMind: {
+      threatsBlocked: hyperMind.threatsBlocked,
+      scamBlocked: hyperMind.scamBlocked,
+      networkHealth: hyperMind.networkHealth,
+      bannedCreators: Array.from(hyperMind.bannedCreators),
+      modules: hyperMind.modules,
+      liveLog: hyperMind.liveLog,
+    },
+  });
+}
+
+hydrateFromPersistence();
+isReadyToPersist = true;
 
 function buildSnapshot(): EcosystemSnapshot {
   const acceptedTransactions = state.transactions.filter((t) => t.status === 'accepted').length;
@@ -348,6 +466,9 @@ function buildSnapshot(): EcosystemSnapshot {
 
   const totalBackingUsd = state.collateralReserves.reduce((sum, item) => sum + item.backingUsd, 0);
   const collateralRatioActual = Number((totalBackingUsd / NovaPolicy.networkValueAtPegUsd).toFixed(2));
+  const marketplaceVolumeNvc = Number(
+    state.marketplaceOrders.reduce((sum, o) => sum + o.amountNvc, 0).toFixed(4),
+  );
 
   return {
     constants: NovaPolicy,
@@ -376,6 +497,7 @@ function buildSnapshot(): EcosystemSnapshot {
       verifiedCitizens: state.citizens.filter((c) => c.kycVerified).length,
       openProposals: state.proposals.filter((p) => p.status === 'open').length,
       collateralRatioActual,
+      marketplaceVolumeNvc,
     },
     transactions: state.transactions,
     apps: state.apps,
@@ -387,6 +509,8 @@ function buildSnapshot(): EcosystemSnapshot {
     citizens: state.citizens,
     proposals: state.proposals,
     collateralReserves: state.collateralReserves,
+    marketplaceListings: state.marketplaceListings,
+    marketplaceOrders: state.marketplaceOrders,
   };
 }
 
@@ -811,6 +935,7 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
     );
   }
 
+  persistNow();
   res.json({ node, snapshot: buildSnapshot() });
 });
 
@@ -1028,6 +1153,185 @@ app.get('/api/collateral/proof', (_req: Request, res: Response) => {
     totalBackingUsd,
     reserves: state.collateralReserves,
   });
+});
+
+// Real-Economy NVC Marketplace & Halal Mudarabah Escrow
+app.post('/api/marketplace/listings', (req: Request, res: Response) => {
+  const title = String(req.body?.title || '').trim();
+  const description = String(req.body?.description || '').trim();
+  const merchantId = String(req.body?.merchantId || state.citizens[0]?.id || 'NVC-MERCHANT').trim();
+  const merchantName = String(req.body?.merchantName || 'Verified NVC Citizen Guild').trim();
+  const category = (req.body?.category || 'Physical Goods') as MarketplaceListing['category'];
+  const settlementModel = (req.body?.settlementModel || 'Direct Real Trade') as MarketplaceListing['settlementModel'];
+  const priceNvc = Number(req.body?.priceNvc);
+  const stock = Math.max(1, Math.floor(Number(req.body?.stock || 10)));
+
+  if (!title || !description || !Number.isFinite(priceNvc) || priceNvc <= 0) {
+    res.status(400).json({ error: 'Listing title, description, and positive NVC price are required.' });
+    return;
+  }
+
+  const scan = hyperMind.scanCompliance({ memo: title, spec: description, category });
+  if (!scan.passed) {
+    appendAudit('RibaGuard', 'MARKETPLACE_LISTING_BLOCKED', 'rejected', `${title}: ${scan.reason}`);
+    persistNow();
+    res.status(403).json({ error: scan.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const listing: MarketplaceListing = {
+    id: `mkt-${Date.now().toString(36)}`,
+    title,
+    merchantId,
+    merchantName,
+    category,
+    priceNvc: Number(priceNvc.toFixed(6)),
+    description,
+    settlementModel,
+    stock,
+    soldCount: 0,
+    halalVerified: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  state.marketplaceListings.unshift(listing);
+  appendAudit(
+    'Nova',
+    'MARKETPLACE_LISTED',
+    'accepted',
+    `Listed "${listing.title}" (${listing.priceNvc} NVC / ${formatUsdSafe(nvcToUsd(listing.priceNvc))}) under ${listing.settlementModel}.`,
+  );
+  persistNow();
+  res.status(201).json({ listing, snapshot: buildSnapshot() });
+});
+
+function formatUsdSafe(v: number): string {
+  return `$${v.toFixed(2)}`;
+}
+
+app.post('/api/marketplace/buy', (req: Request, res: Response) => {
+  const listingId = String(req.body?.listingId || '').trim();
+  const buyerId = String(req.body?.buyerId || '').trim();
+  const quantity = Math.max(1, Math.floor(Number(req.body?.quantity || 1)));
+
+  const listing = state.marketplaceListings.find((l) => l.id === listingId);
+  const buyer = state.citizens.find((c) => c.id === buyerId && c.kycVerified);
+
+  if (!listing || !buyer) {
+    res.status(400).json({ error: 'Valid marketplace listing and verified 1-KYC Citizen buyer are required.' });
+    return;
+  }
+  if (listing.stock < quantity) {
+    res.status(409).json({ error: `Insufficient stock for "${listing.title}".` });
+    return;
+  }
+
+  const totalNvc = Number((listing.priceNvc * quantity).toFixed(6));
+  if (buyer.balanceNvc < totalNvc) {
+    res.status(409).json({
+      error: `Insufficient balance: ${buyer.id} holds ${buyer.balanceNvc.toFixed(4)} NVC, needs ${totalNvc.toFixed(4)} NVC. Mine more NVC first.`,
+    });
+    return;
+  }
+
+  const analysis = hyperMind.analyzeTransaction({
+    sender: buyer.id,
+    recipient: listing.merchantId,
+    amount: totalNvc,
+    source: 'marketplace',
+    memo: `${listing.settlementModel}: ${listing.title} x${quantity}`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    existingTransactions: state.transactions,
+  });
+
+  if (!analysis.isSafe) {
+    res.status(403).json({ error: analysis.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const micronNova = Math.round(totalNvc * NovaPolicy.micronNovaPerNvc);
+  const tx: NovaTransaction = {
+    id: `tx-mkt-${Date.now().toString(36)}`,
+    sender: buyer.id,
+    recipient: listing.merchantId,
+    amount: totalNvc,
+    micronNova,
+    source: 'marketplace',
+    memo: `${listing.settlementModel}: ${listing.title} x${quantity}`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    status: 'accepted',
+    reason: analysis.reason,
+    ribaRejected: false,
+    gamblingRejected: false,
+    exchangeRejected: false,
+    riskScore: analysis.riskScore,
+    purityScore: analysis.purityScore,
+    hash: sha256({ listingId: listing.id, buyerId: buyer.id, totalNvc, timestamp }),
+    timestamp,
+  };
+
+  buyer.balanceNvc = Number((buyer.balanceNvc - totalNvc).toFixed(6));
+  buyer.reputationScore = Math.min(100, buyer.reputationScore + 1);
+  listing.stock -= quantity;
+  listing.soldCount += quantity;
+
+  const order: MarketplaceOrder = {
+    id: `ord-${Date.now().toString(36)}`,
+    listingId: listing.id,
+    listingTitle: listing.title,
+    buyerId: buyer.id,
+    merchantId: listing.merchantId,
+    amountNvc: totalNvc,
+    micronNova,
+    usdEquivalent: Number(nvcToUsd(totalNvc).toFixed(2)),
+    txId: tx.id,
+    hash: tx.hash,
+    timestamp,
+  };
+
+  state.transactions.unshift(tx);
+  state.marketplaceOrders.unshift(order);
+  appendAudit(
+    'Nova',
+    'REAL_ECONOMY_SETTLEMENT',
+    'accepted',
+    `${buyer.id} settled ${totalNvc} NVC (${micronNova.toLocaleString()} µNVC / $${order.usdEquivalent.toFixed(2)}) for "${listing.title}" (${listing.settlementModel}).`,
+  );
+  persistNow();
+
+  res.status(201).json({ order, transaction: tx, snapshot: buildSnapshot() });
+});
+
+// Audit Integrity Verification & Clean Demo Reset
+app.get('/api/audit/verify', (_req: Request, res: Response) => {
+  let verifiedCount = 0;
+  for (const entry of state.auditLog) {
+    const expected = sha256({
+      moduleName: entry.module,
+      action: entry.action,
+      verdict: entry.verdict,
+      detail: entry.detail,
+      timestamp: entry.timestamp,
+    });
+    if (expected === entry.hash) {
+      verifiedCount += 1;
+    }
+  }
+  res.json({
+    intact: verifiedCount === state.auditLog.length,
+    verifiedCount,
+    totalEntries: state.auditLog.length,
+  });
+});
+
+app.post('/api/ecosystem/reset', (_req: Request, res: Response) => {
+  clearPersistedData();
+  hyperMind = new NovaHyperMind();
+  state = createInitialState();
+  seedInitialAuditAndDevices();
+  persistNow();
+  res.json({ reset: true, snapshot: buildSnapshot() });
 });
 
 // MainnetGovernor: Audits oracle alignment, app compliance, and purity filter health

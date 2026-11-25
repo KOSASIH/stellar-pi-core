@@ -212,6 +212,35 @@ export interface CollateralReserveItem {
   lastAuditedAt: string;
 }
 
+export interface MarketplaceListing {
+  id: string;
+  title: string;
+  merchantId: string;
+  merchantName: string;
+  category: 'Physical Goods' | 'Clean Energy' | 'Logistics' | 'Halal Mudarabah';
+  priceNvc: number;
+  description: string;
+  settlementModel: 'Direct Real Trade' | 'Fee-Based Service' | 'Mudarabah Profit-Share (0% Interest)';
+  stock: number;
+  soldCount: number;
+  halalVerified: boolean;
+  createdAt: string;
+}
+
+export interface MarketplaceOrder {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  buyerId: string;
+  merchantId: string;
+  amountNvc: number;
+  micronNova: number;
+  usdEquivalent: number;
+  txId: string;
+  hash: string;
+  timestamp: string;
+}
+
 export interface EcosystemSnapshot {
   constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
@@ -239,6 +268,7 @@ export interface EcosystemSnapshot {
     verifiedCitizens: number;
     openProposals: number;
     collateralRatioActual: number;
+    marketplaceVolumeNvc: number;
   };
   transactions: NovaTransaction[];
   apps: NovaAppRecord[];
@@ -250,5 +280,7 @@ export interface EcosystemSnapshot {
   citizens: CitizenAccount[];
   proposals: GovernanceProposal[];
   collateralReserves: CollateralReserveItem[];
+  marketplaceListings: MarketplaceListing[];
+  marketplaceOrders: MarketplaceOrder[];
 }
 

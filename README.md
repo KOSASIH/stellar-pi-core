@@ -69,6 +69,10 @@ Stellar Nova Core is governed by **NovaHyperMind** (`server/hypermind.ts`), a ce
 - `POST /api/governance/proposals` — Create a compliance-screened 1-Person = 1-Vote community proposal
 - `POST /api/governance/proposals/:id/vote` — Cast a 1-KYC Citizen ballot (`yes` or `no`)
 - `GET /api/collateral/proof` — Audited 1.5x real-economy Halal reserve proof breakdown
+- `POST /api/marketplace/listings` — Publish a compliance-screened Real-Economy or Halal Mudarabah NVC listing
+- `POST /api/marketplace/buy` — Settle a marketplace item using a verified 1-KYC Citizen NVC wallet
+- `GET /api/audit/verify` — Cryptographically verify all SHA-256 audit log entries
+- `POST /api/ecosystem/reset` — Reset persisted disk state (`.nova-data/ecosystem-state.json`) cleanly to baseline
 - `POST /api/governance/audit` — Run `MainnetGovernor` ecosystem compliance audit
 - `POST /api/governance/mainnet-launch` — Execute `MainnetGovernor` launch when all oracle nodes align at `$3.14`
 

@@ -7,18 +7,21 @@ import {
   Brain,
   CheckCircle2,
   Cpu,
+  Download,
   Eye,
   Globe2,
   Lock,
   Network,
   Power,
   Rocket,
+  RotateCcw,
   Scale,
   Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Store,
   Users,
   Vote,
   XCircle,
@@ -34,7 +37,7 @@ import {
   type NovaTransaction,
 } from '../../shared/novaPolicy.ts';
 
-type TabId = 'transactions' | 'apps' | 'oracle' | 'audit' | 'hyper' | 'citizens';
+type TabId = 'transactions' | 'apps' | 'oracle' | 'citizens' | 'marketplace' | 'audit' | 'hyper';
 
 function SupernovaIcon() {
   return (
@@ -113,6 +116,19 @@ export default function App() {
   const [newProposalTitle, setNewProposalTitle] = useState('');
   const [newProposalDesc, setNewProposalDesc] = useState('');
   const [converterNvc, setConverterNvc] = useState('10');
+  const [miningNotice, setMiningNotice] = useState<{
+    citizenId: string;
+    amount: number;
+    sessions: number;
+    timestamp: string;
+  } | null>(null);
+
+  // Real-Economy Marketplace state
+  const [mktTitle, setMktTitle] = useState('');
+  const [mktCategory, setMktCategory] = useState<'Physical Goods' | 'Clean Energy' | 'Logistics' | 'Halal Mudarabah'>('Physical Goods');
+  const [mktSettlementModel, setMktSettlementModel] = useState<'Direct Real Trade' | 'Fee-Based Service' | 'Mudarabah Profit-Share (0% Interest)'>('Direct Real Trade');
+  const [mktPriceNvc, setMktPriceNvc] = useState('12.5');
+  const [mktDesc, setMktDesc] = useState('');
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -351,7 +367,6 @@ export default function App() {
   }
 
   async function handleMobileMine(citizenId: string) {
-    setFeedback(null);
     const res = await fetch('/api/citizens/mine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -363,9 +378,16 @@ export default function App() {
     const data = await res.json();
     if (data.snapshot) setSnapshot(data.snapshot);
     if (res.ok) {
+      const notice = {
+        citizenId: data.citizen.id,
+        amount: data.transaction.amount,
+        sessions: data.citizen.miningSessions,
+        timestamp: data.transaction.timestamp,
+      };
+      setMiningNotice(notice);
       setFeedback({
         kind: 'success',
-        text: `${data.citizen.id} mined ${data.transaction.amount} NVC (${formatMicronNova(data.transaction.amount)} = ${formatUsd(nvcToUsd(data.transaction.amount))}) via low-energy mobile SCP.`,
+        text: `${notice.citizenId} mined ${notice.amount} NVC (${formatMicronNova(notice.amount)} = ${formatUsd(nvcToUsd(notice.amount))}) via low-energy mobile SCP · Session #${notice.sessions} (${new Date(notice.timestamp).toLocaleTimeString()})`,
       });
     } else {
       setFeedback({ kind: 'error', text: data.error || 'Mining reward blocked.' });
@@ -420,6 +442,96 @@ export default function App() {
     }
   }
 
+  async function handleCreateListing(e: FormEvent) {
+    e.preventDefault();
+    setFeedback(null);
+    const activeCitizen = snapshot?.citizens.find((c) => c.id === selectedCitizenId);
+    const res = await fetch('/api/marketplace/listings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: mktTitle,
+        description: mktDesc,
+        category: mktCategory,
+        settlementModel: mktSettlementModel,
+        priceNvc: Number(mktPriceNvc),
+        merchantId: selectedCitizenId,
+        merchantName: activeCitizen?.displayName || 'Verified NVC Citizen',
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setMktTitle('');
+      setMktDesc('');
+      setFeedback({
+        kind: 'success',
+        text: `Listed "${data.listing.title}" (${data.listing.priceNvc} NVC = ${formatUsd(nvcToUsd(data.listing.priceNvc))}) after HyperScanner & RibaGuard clearance.`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Listing rejected by compliance filter.' });
+    }
+  }
+
+  async function handleBuyListing(listingId: string) {
+    setFeedback(null);
+    const res = await fetch('/api/marketplace/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        listingId,
+        buyerId: selectedCitizenId,
+        quantity: 1,
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setFeedback({
+        kind: 'success',
+        text: `Settled ${data.order.amountNvc} NVC (${formatMicronNova(data.order.amountNvc)} · ${formatUsd(data.order.usdEquivalent)}) for "${data.order.listingTitle}".`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Order could not be settled.' });
+    }
+  }
+
+  async function handleVerifyAuditChain() {
+    setFeedback(null);
+    const res = await fetch('/api/audit/verify');
+    const data = await res.json();
+    setFeedback({
+      kind: data.intact ? 'success' : 'error',
+      text: data.intact
+        ? `SHA-256 Chain Integrity Verified: ${data.verifiedCount}/${data.totalEntries} immutable audit entries passed cryptographic check.`
+        : `Audit integrity warning: ${data.verifiedCount}/${data.totalEntries} verified.`,
+    });
+  }
+
+  function handleExportAuditJson() {
+    if (!snapshot) return;
+    const blob = new Blob([JSON.stringify(snapshot.auditLog, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stellar-nova-core-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleResetEcosystem() {
+    setFeedback(null);
+    const res = await fetch('/api/ecosystem/reset', { method: 'POST' });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    setSelectedCitizenId('NVC-MINER-RASPI-09');
+    setMiningNotice(null);
+    setFeedback({
+      kind: 'success',
+      text: 'Ecosystem persisted state restored cleanly to Stellar Nova Core baseline.',
+    });
+  }
+
   if (loading || !snapshot) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
@@ -429,6 +541,8 @@ export default function App() {
   }
 
   const { constants, metrics } = snapshot;
+  const totalPolicyBlocked =
+    snapshot.ribaBlockedTransactions + snapshot.gamblingBlocked + snapshot.exchangeBlocked;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -528,9 +642,9 @@ export default function App() {
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
-              {metrics.acceptedTransactions}{' '}
+              {metrics.acceptedTransactions} Accepted{' '}
               <span className="text-sm font-normal text-slate-400">
-                / {metrics.rejectedTransactions} blocked
+                / {metrics.rejectedTransactions} Blocked
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-400">
@@ -570,7 +684,11 @@ export default function App() {
               <ShieldAlert className="w-4 h-4 text-amber-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
-              {snapshot.ribaBlockedTransactions} blocked
+              {totalPolicyBlocked === 0 ? (
+                <span className="text-lg text-emerald-300">0 blocked - Network Clean</span>
+              ) : (
+                <span>{totalPolicyBlocked} blocked</span>
+              )}
             </div>
             <p className="mt-1 text-xs text-slate-400">
               Stabilizer: {snapshot.stabilizerStatus}
@@ -586,6 +704,7 @@ export default function App() {
               { id: 'apps', label: 'Autonomous App Builder', icon: AppWindow },
               { id: 'oracle', label: 'Oracle & Mainnet Governor', icon: Globe2 },
               { id: 'citizens', label: 'Citizens, Mining & Reserves', icon: Users },
+              { id: 'marketplace', label: 'Real-Economy Marketplace', icon: Store },
               { id: 'audit', label: 'Immutable Audit Trail', icon: ShieldCheck },
               { id: 'hyper', label: 'Hyper-Intelligence', icon: Brain },
             ] as const
@@ -1408,6 +1527,25 @@ export default function App() {
                   </label>
                 </div>
 
+                {miningNotice && (
+                  <div
+                    role="status"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-emerald-700/60 bg-emerald-950/60 px-3.5 py-2.5 text-xs text-emerald-200"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                      <span className="tabular-nums">
+                        {miningNotice.citizenId} mined {miningNotice.amount} NVC (
+                        {formatMicronNova(miningNotice.amount)} ={' '}
+                        {formatUsd(nvcToUsd(miningNotice.amount))}) · Session #{miningNotice.sessions}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-emerald-300/80 tabular-nums shrink-0">
+                      {new Date(miningNotice.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
@@ -1508,6 +1646,212 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 7: Real-Economy NVC Marketplace & Halal Mudarabah Escrow */}
+        {activeTab === 'marketplace' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <form
+                onSubmit={handleCreateListing}
+                className="lg:col-span-4 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
+              >
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    List Real-Economy Good or Mudarabah
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Every listing is screened by RibaGuard AI & HyperScanner. Fixed 1 NVC = $3.14 USD settlement.
+                  </p>
+                </div>
+
+                <label className="block text-xs text-slate-300 space-y-1">
+                  <span>Listing Title</span>
+                  <input
+                    type="text"
+                    value={mktTitle}
+                    onChange={(e) => setMktTitle(e.target.value)}
+                    placeholder="e.g. Solar Irrigation Pump Kit"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
+                    required
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-xs text-slate-300 space-y-1">
+                    <span>Category</span>
+                    <select
+                      value={mktCategory}
+                      onChange={(e) => setMktCategory(e.target.value as typeof mktCategory)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
+                    >
+                      <option value="Physical Goods">Physical Goods</option>
+                      <option value="Clean Energy">Clean Energy</option>
+                      <option value="Logistics">Logistics</option>
+                      <option value="Halal Mudarabah">Halal Mudarabah</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs text-slate-300 space-y-1">
+                    <span>Price (NVC)</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={mktPriceNvc}
+                      onChange={(e) => setMktPriceNvc(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs tabular-nums text-white"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <label className="block text-xs text-slate-300 space-y-1">
+                  <span>Settlement Model</span>
+                  <select
+                    value={mktSettlementModel}
+                    onChange={(e) => setMktSettlementModel(e.target.value as typeof mktSettlementModel)}
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
+                  >
+                    <option value="Direct Real Trade">Direct Real Trade</option>
+                    <option value="Fee-Based Service">Fee-Based Service</option>
+                    <option value="Mudarabah Profit-Share (0% Interest)">Mudarabah Profit-Share (0% Interest)</option>
+                  </select>
+                </label>
+
+                <label className="block text-xs text-slate-300 space-y-1">
+                  <span>Description</span>
+                  <textarea
+                    rows={3}
+                    value={mktDesc}
+                    onChange={(e) => setMktDesc(e.target.value)}
+                    placeholder="Real goods or 0% interest Mudarabah share..."
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
+                    required
+                  />
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5"
+                  >
+                    Publish NVC Listing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMktTitle('15% Fixed APR Credit Loan');
+                      setMktDesc('Borrow NVC with 15% interest APR lending yield');
+                    }}
+                    className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2.5"
+                  >
+                    Test Riba Listing
+                  </button>
+                </div>
+              </form>
+
+              <div className="lg:col-span-8 space-y-4">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-white">
+                        Real-Economy Commerce & Mudarabah Catalog
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        Total Marketplace Settled Volume: {snapshot.metrics.marketplaceVolumeNvc} NVC ({formatUsd(nvcToUsd(snapshot.metrics.marketplaceVolumeNvc))})
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-slate-300">
+                      <span>Buyer Wallet:</span>
+                      <select
+                        value={selectedCitizenId}
+                        onChange={(e) => setSelectedCitizenId(e.target.value)}
+                        className="rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white"
+                      >
+                        {snapshot.citizens.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.displayName} ({c.balanceNvc.toFixed(2)} NVC)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {snapshot.marketplaceListings.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-slate-800 bg-slate-950/70 p-4 flex flex-col justify-between gap-3"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span>{item.category} · {item.merchantName}</span>
+                            <span className="tabular-nums text-emerald-300">
+                              {item.stock} left
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                          <p className="text-xs text-slate-400">{item.description}</p>
+                          <p className="text-[11px] text-amber-300/90">{item.settlementModel}</p>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                          <div className="tabular-nums">
+                            <div className="text-sm font-semibold text-white">
+                              {item.priceNvc} NVC · {formatUsd(nvcToUsd(item.priceNvc))}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {formatMicronNova(item.priceNvc)} · {item.soldCount} sold
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={item.stock < 1}
+                            onClick={() => handleBuyListing(item.id)}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs whitespace-nowrap disabled:opacity-40"
+                          >
+                            Pay with NVC
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {snapshot.marketplaceOrders.length > 0 && (
+                  <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-white">
+                      Recent Real-Economy Settlements ({snapshot.marketplaceOrders.length})
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400">
+                            <th className="py-2 pr-3 font-medium">Order / TX</th>
+                            <th className="py-2 px-3 font-medium">Item</th>
+                            <th className="py-2 px-3 font-medium">Buyer</th>
+                            <th className="py-2 pl-3 font-medium text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/70">
+                          {snapshot.marketplaceOrders.map((ord) => (
+                            <tr key={ord.id}>
+                              <td className="py-2 pr-3 font-mono text-[11px] text-slate-300">{ord.txId}</td>
+                              <td className="py-2 px-3 text-white">{ord.listingTitle}</td>
+                              <td className="py-2 px-3 font-mono text-[11px] text-slate-400">{ord.buyerId}</td>
+                              <td className="py-2 pl-3 text-right tabular-nums text-emerald-300 font-medium">
+                                {ord.amountNvc} NVC ({formatUsd(ord.usdEquivalent)})
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 4: Immutable Audit Trail */}
         {activeTab === 'audit' && (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
@@ -1516,17 +1860,43 @@ export default function App() {
                 <h2 className="text-base font-semibold text-white">
                   SHA-256 Audit Trail Logger
                 </h2>
-                <span className="text-xs text-slate-400">{snapshot.auditLog.length} entries</span>
+                <span className="text-xs text-slate-400">{snapshot.auditLog.length} entries · Persisted on disk</span>
               </div>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={auditSearch}
-                  onChange={(e) => setAuditSearch(e.target.value)}
-                  placeholder="Filter audit log..."
-                  className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-56"
-                />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Filter audit log..."
+                    className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-48"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleVerifyAuditChain}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-medium"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Verify SHA-256 Chain
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportAuditJson}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetEcosystem}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset Baseline
+                </button>
               </div>
             </div>
             <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
