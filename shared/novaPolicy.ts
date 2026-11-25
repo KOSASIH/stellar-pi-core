@@ -1,16 +1,17 @@
-export const PiPolicy = {
-  name: 'Stellar Pi Core',
-  tagline: 'Not a Coin to Trade. A Currency to Use.',
-  symbol: 'PI',
+export const NovaPolicy = {
+  name: 'Stellar Nova Core',
+  coinName: 'Nova Core Coin',
+  symbol: 'NVC',
+  tagline: 'Born From a Supernova. Not a Coin to Trade. A Currency to Use.',
   fixedValueUsd: 3.14,
   totalSupply: 100_000_000_000,
   networkValueAtPegUsd: 314_000_000_000,
   collateralRatio: 1.5,
-  micronPiPerPi: 1_000_000,
+  micronNovaPerNvc: 1_000_000,
   transactionFeeUsd: 0.001,
   blockTimeSec: 5,
   consensus: 'Stellar Consensus Protocol (SCP)',
-  piExclusivity: 'PI Only',
+  novaExclusivity: 'NVC Only',
   noGambling: 'Strictly Enforced',
   ethicalAi: 'AHI AI Active',
   founderAccountability: 'Community Governed',
@@ -28,6 +29,7 @@ export const PiPolicy = {
     'yield',
     'staking reward',
     'lending interest',
+    'bunga',
     'loan interest',
     'fixed return',
     'profit sharing interest',
@@ -35,7 +37,6 @@ export const PiPolicy = {
     'borrow interest',
     'leverage',
     'margin interest',
-    'bunga',
     'rentenir',
   ] as const,
   bannedFinancialModels: [
@@ -47,11 +48,17 @@ export const PiPolicy = {
   ] as const,
 } as const;
 
-export const PI_CONSTANTS = PiPolicy;
+export function formatMicronNova(nvcAmount: number): string {
+  const micron = Math.round(nvcAmount * NovaPolicy.micronNovaPerNvc);
+  return `${micron.toLocaleString()} µNVC`;
+}
 
-export function formatMicronPi(piAmount: number): string {
-  const micron = Math.round(piAmount * PiPolicy.micronPiPerPi);
-  return `${micron.toLocaleString()} µπ`;
+export function nvcToUsd(nvcAmount: number): number {
+  return nvcAmount * NovaPolicy.fixedValueUsd;
+}
+
+export function isValidNovaValue(value: number): boolean {
+  return Number.isFinite(value) && Math.abs(value - NovaPolicy.fixedValueUsd) < 1e-9;
 }
 
 export function formatUsd(amount: number): string {
@@ -61,12 +68,12 @@ export function formatUsd(amount: number): string {
   })}`;
 }
 
-export interface PiTransaction {
+export interface NovaTransaction {
   id: string;
   sender: string;
   recipient: string;
   amount: number;
-  micronPi: number;
+  micronNova: number;
   source: string;
   memo: string;
   reportedValueUsd: number;
@@ -78,7 +85,7 @@ export interface PiTransaction {
   timestamp: string;
 }
 
-export interface PiAppRecord {
+export interface NovaAppRecord {
   id: string;
   name: string;
   category: string;
@@ -98,7 +105,7 @@ export interface OracleNode {
 }
 
 export interface GovernanceRules {
-  piExclusivity: string;
+  novaExclusivity: string;
   ethicalAi: string;
   founderAccountability: string;
   volatileRejection: string;
@@ -119,7 +126,7 @@ export interface AuditEntry {
 }
 
 export interface EcosystemSnapshot {
-  constants: typeof PiPolicy;
+  constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
   complianceBreached: boolean;
   aiHealthScore: number;
@@ -135,8 +142,8 @@ export interface EcosystemSnapshot {
     verifiedOracleNodes: number;
     isolatedOracleNodes: number;
   };
-  transactions: PiTransaction[];
-  apps: PiAppRecord[];
+  transactions: NovaTransaction[];
+  apps: NovaAppRecord[];
   oracleNodes: OracleNode[];
   auditLog: AuditEntry[];
 }

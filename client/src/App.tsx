@@ -15,14 +15,34 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
-  formatMicronPi,
+  formatMicronNova,
   formatUsd,
+  isValidNovaValue,
+  nvcToUsd,
   type EcosystemSnapshot,
-  type PiAppRecord,
-  type PiTransaction,
-} from '../../shared/piPolicy.ts';
+  type NovaAppRecord,
+  type NovaTransaction,
+} from '../../shared/novaPolicy.ts';
 
 type TabId = 'transactions' | 'apps' | 'oracle' | 'audit';
+
+function SupernovaIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="w-5 h-5 text-amber-400"
+    >
+      <path
+        d="M12 2L14.4 8.6L21 6.5L16.3 12L21 17.5L14.4 15.4L12 22L9.6 15.4L3 17.5L7.7 12L3 6.5L9.6 8.6L12 2Z"
+        fill="currentColor"
+        fillOpacity="0.9"
+      />
+      <circle cx="12" cy="12" r="2.6" className="fill-amber-200" />
+    </svg>
+  );
+}
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<EcosystemSnapshot | null>(null);
@@ -31,8 +51,8 @@ export default function App() {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   // Transaction form state
-  const [sender, setSender] = useState('PI-MINER-RASPI-09');
-  const [recipient, setRecipient] = useState('PI-MERCHANT-04');
+  const [sender, setSender] = useState('NVC-MINER-RASPI-09');
+  const [recipient, setRecipient] = useState('NVC-MERCHANT-04');
   const [amount, setAmount] = useState('25');
   const [source, setSource] = useState('mining');
   const [memo, setMemo] = useState('Peer-to-peer equipment settlement');
@@ -43,7 +63,7 @@ export default function App() {
   const [appName, setAppName] = useState('');
   const [appCategory, setAppCategory] = useState('Commerce');
   const [appDescription, setAppDescription] = useState('');
-  const [paymentAsset, setPaymentAsset] = useState('PI');
+  const [paymentAsset, setPaymentAsset] = useState('NVC');
   const [submittingApp, setSubmittingApp] = useState(false);
 
   const loadSnapshot = useCallback(async () => {
@@ -55,7 +75,7 @@ export default function App() {
     } catch (err) {
       setFeedback({
         kind: 'error',
-        text: err instanceof Error ? err.message : 'Unable to reach Stellar Pi Core backend.',
+        text: err instanceof Error ? err.message : 'Unable to reach Stellar Nova Core backend.',
       });
     } finally {
       setLoading(false);
@@ -71,7 +91,7 @@ export default function App() {
     setSubmittingTx(true);
     setFeedback(null);
     try {
-      const res = await fetch('/api/pi/transaction', {
+      const res = await fetch('/api/nova/transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,7 +108,7 @@ export default function App() {
       if (res.ok) {
         setFeedback({
           kind: 'success',
-          text: `Transaction ${data.transaction.id} (${data.transaction.amount} PI · ${formatMicronPi(data.transaction.amount)}) accepted by AHI AI.`,
+          text: `Transaction ${data.transaction.id} (${data.transaction.amount} NVC = ${formatUsd(nvcToUsd(data.transaction.amount))} USD · ${formatMicronNova(data.transaction.amount)}) accepted by AHI AI.`,
         });
       } else {
         setFeedback({
@@ -97,7 +117,7 @@ export default function App() {
         });
       }
     } catch {
-      setFeedback({ kind: 'error', text: 'Network error submitting PI transaction.' });
+      setFeedback({ kind: 'error', text: 'Network error submitting NVC transaction.' });
     } finally {
       setSubmittingTx(false);
     }
@@ -131,13 +151,13 @@ export default function App() {
         });
       }
     } catch {
-      setFeedback({ kind: 'error', text: 'Network error building PI application.' });
+      setFeedback({ kind: 'error', text: 'Network error building NVC application.' });
     } finally {
       setSubmittingApp(false);
     }
   }
 
-  async function handleToggleApp(app: PiAppRecord) {
+  async function handleToggleApp(app: NovaAppRecord) {
     const res = await fetch(`/api/apps/${app.id}/halt`, { method: 'POST' });
     const data = await res.json();
     if (data.snapshot) setSnapshot(data.snapshot);
@@ -153,11 +173,10 @@ export default function App() {
     const data = await res.json();
     if (data.snapshot) setSnapshot(data.snapshot);
     setFeedback({
-      kind: value === 3.14 ? 'success' : 'error',
-      text:
-        value === 3.14
-          ? `Oracle ${nodeId} confirmed $3.14 Pi Peg valuation.`
-          : `Oracle ${nodeId} deviated (${formatUsd(value)}) and was flagged for community vote.`,
+      kind: isValidNovaValue(value) ? 'success' : 'error',
+      text: isValidNovaValue(value)
+        ? `Oracle ${nodeId} confirmed $3.14 Nova Peg valuation.`
+        : `Oracle ${nodeId} deviated (${formatUsd(value)}) and was flagged for community vote.`,
     });
   }
 
@@ -181,14 +200,14 @@ export default function App() {
     if (data.snapshot) setSnapshot(data.snapshot);
     setFeedback({
       kind: res.ok ? 'success' : 'error',
-      text: res.ok ? 'MainnetGovernor launched Stellar Pi Core Mainnet.' : data.error,
+      text: res.ok ? 'MainnetGovernor launched Stellar Nova Core Mainnet.' : data.error,
     });
   }
 
   if (loading || !snapshot) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
-        Loading Stellar Pi Core Ecosystem...
+        Loading Stellar Nova Core Ecosystem...
       </div>
     );
   }
@@ -200,12 +219,12 @@ export default function App() {
       <header className="border-b border-slate-800 bg-slate-900/70 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-500/15 border border-amber-400/30 flex items-center justify-center text-amber-300 font-bold text-lg">
-              π
+            <div className="h-10 w-10 rounded-lg bg-amber-500/15 border border-amber-400/30 flex items-center justify-center">
+              <SupernovaIcon />
             </div>
             <div>
               <h1 className="text-lg font-semibold tracking-tight text-white">
-                Stellar Pi Core — Ecosystem Console
+                Stellar Nova Core — Ecosystem Console
               </h1>
               <p className="text-xs text-slate-400">
                 Stablecoin-Only · Fixed Value {formatUsd(constants.fixedValueUsd)} · Gambling-Free · RIBA-FREE · 0% Interest
@@ -226,7 +245,7 @@ export default function App() {
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
-              1 PI = {formatUsd(constants.fixedValueUsd)}
+              1 NVC = {formatUsd(constants.fixedValueUsd)}
             </span>
           </div>
         </div>
@@ -264,20 +283,20 @@ export default function App() {
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Fixed PI Peg</span>
+              <span>Fixed NVC Peg</span>
               <Scale className="w-4 h-4 text-amber-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
               {formatUsd(constants.fixedValueUsd)}
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              Supply: {(constants.totalSupply / 1e9).toFixed(0)}B PI · {constants.collateralRatio}x Collateral · $314B Peg Cap
+              Supply: {(constants.totalSupply / 1e9).toFixed(0)}B NVC · {constants.collateralRatio}x Collateral
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>PI Purity & Filter</span>
+              <span>Nova Purity & Filter</span>
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
@@ -293,7 +312,7 @@ export default function App() {
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>PI-Exclusive Apps</span>
+              <span>Nova-Exclusive Apps</span>
               <AppWindow className="w-4 h-4 text-sky-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
@@ -319,7 +338,7 @@ export default function App() {
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>RibaGuard AI: 0% Interest</span>
+              <span>RibaGuard AI: 0% Interest - Halal</span>
               <ShieldAlert className="w-4 h-4 text-amber-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
@@ -370,10 +389,10 @@ export default function App() {
             >
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  Submit PI Stablecoin Transaction
+                  Submit NVC Stablecoin Transaction
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Screened in real time by AHI AI, PiValuePolicy, and PiPurityEnforcer. 1 PI = {constants.micronPiPerPi.toLocaleString()} Micron Pi.
+                  Screened in real time by AHI AI, NovaValuePolicy, NovaPurityEnforcer, and RibaGuard AI. 1 NVC = {constants.micronNovaPerNvc.toLocaleString()} Micron Nova.
                 </p>
               </div>
 
@@ -402,7 +421,7 @@ export default function App() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Amount (PI)</span>
+                  <span>Amount (NVC)</span>
                   <input
                     type="number"
                     min="0.000001"
@@ -414,7 +433,7 @@ export default function App() {
                   />
                   {Number.isFinite(Number(amount)) && Number(amount) > 0 && (
                     <span className="block text-[11px] text-amber-300/90 tabular-nums">
-                      = {formatMicronPi(Number(amount))}
+                      = {formatMicronNova(Number(amount))}
                     </span>
                   )}
                 </label>
@@ -454,7 +473,7 @@ export default function App() {
                   type="text"
                   value={memo}
                   onChange={(e) => setMemo(e.target.value)}
-                  placeholder="Describe purpose (gambling keywords are auto-rejected)"
+                  placeholder="Describe purpose (gambling & riba keywords are auto-rejected)"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
                 />
               </label>
@@ -465,7 +484,7 @@ export default function App() {
                   disabled={submittingTx}
                   className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50"
                 >
-                  {submittingTx ? 'Verifying...' : 'Validate & Submit PI Transfer'}
+                  {submittingTx ? 'Verifying...' : 'Validate & Submit NVC Transfer'}
                 </button>
               </div>
 
@@ -495,7 +514,7 @@ export default function App() {
                   onClick={() => {
                     setSource('p2p');
                     setReportedValueUsd('3.14');
-                    setMemo('Lending 100 PI with 10% interest APY');
+                    setMemo('Lending 100 NVC with 10% interest APY');
                   }}
                   className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300"
                 >
@@ -529,7 +548,7 @@ export default function App() {
               </div>
 
               <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
-                {snapshot.transactions.map((tx: PiTransaction) => (
+                {snapshot.transactions.map((tx: NovaTransaction) => (
                   <div
                     key={tx.id}
                     className={`rounded-lg border p-3.5 ${
@@ -560,14 +579,9 @@ export default function App() {
                         </span>
                       </div>
                       <div className="text-right tabular-nums">
-                        <span className="font-semibold text-sm text-white">
-                          {tx.amount} PI ({formatUsd(tx.amount * tx.reportedValueUsd)})
+                        <span className="font-semibold text-xs sm:text-sm text-white">
+                          {tx.amount} NVC = {formatUsd(tx.amount * tx.reportedValueUsd)} USD · {formatMicronNova(tx.amount)}
                         </span>
-                        {tx.amount < 1 && (
-                          <span className="block text-[11px] text-amber-300">
-                            {formatMicronPi(tx.amount)}
-                          </span>
-                        )}
                       </div>
                     </div>
                     <p className="mt-1.5 text-xs text-slate-300">
@@ -599,7 +613,7 @@ export default function App() {
                   Autonomous App Builder
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Generates PI-exclusive internal applications. Gambling and non-PI assets are strictly blocked.
+                  Generates Nova-exclusive internal applications. Gambling and non-NVC assets are strictly blocked.
                 </p>
                 <p className="text-xs text-amber-300/90 mt-1.5">
                   Forbidden: Lending with interest, Staking APY, Yield Farming, Leverage
@@ -612,7 +626,7 @@ export default function App() {
                   type="text"
                   value={appName}
                   onChange={(e) => setAppName(e.target.value)}
-                  placeholder="e.g. Pi Supply Chain Verifier"
+                  placeholder="e.g. Nova Supply Chain Verifier"
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
                   required
                 />
@@ -640,7 +654,7 @@ export default function App() {
                     onChange={(e) => setPaymentAsset(e.target.value)}
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
                   >
-                    <option value="PI">PI (Fixed $3.14)</option>
+                    <option value="NVC">NVC (Fixed $3.14)</option>
                     <option value="USDT">USDT (Volatile - Rejected)</option>
                     <option value="BTC">BTC (External - Rejected)</option>
                   </select>
@@ -665,14 +679,14 @@ export default function App() {
                   disabled={submittingApp}
                   className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50"
                 >
-                  {submittingApp ? 'Auditing & Building...' : 'Generate & Deploy PI App'}
+                  {submittingApp ? 'Auditing & Building...' : 'Generate & Deploy NVC App'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setAppName('Pi Lending APY');
-                    setAppDescription('Lending Pi with 12% APY interest');
-                    setPaymentAsset('PI');
+                    setAppName('Nova Lending APY');
+                    setAppDescription('Lending NVC with 12% APY interest');
+                    setPaymentAsset('NVC');
                   }}
                   className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2.5"
                 >
@@ -733,7 +747,7 @@ export default function App() {
             <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-white">
-                  Global PI Oracle Compliance Verifier
+                  Global NOVA Oracle Compliance Verifier
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Nodes reporting any value other than $3.14 are flagged for community vote.
@@ -798,12 +812,16 @@ export default function App() {
 
               <dl className="grid grid-cols-2 gap-3 text-xs">
                 <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                  <dt className="text-slate-400">PI Exclusivity</dt>
-                  <dd className="mt-1 font-medium text-white">{snapshot.rules.piExclusivity}</dd>
+                  <dt className="text-slate-400">Nova Exclusivity</dt>
+                  <dd className="mt-1 font-medium text-white">{snapshot.rules.novaExclusivity}</dd>
                 </div>
                 <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
                   <dt className="text-slate-400">No Gambling</dt>
                   <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noGambling}</dd>
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
+                  <dt className="text-slate-400">No Riba</dt>
+                  <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noRiba}</dd>
                 </div>
                 <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
                   <dt className="text-slate-400">Ethical AI Mode</dt>
@@ -814,10 +832,6 @@ export default function App() {
                   <dd className="mt-1 font-medium text-white">
                     {snapshot.rules.founderAccountability}
                   </dd>
-                </div>
-                <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                  <dt className="text-slate-400">No Riba</dt>
-                  <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noRiba}</dd>
                 </div>
                 <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
                   <dt className="text-slate-400">Sharia Compliant</dt>
