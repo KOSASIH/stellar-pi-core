@@ -167,7 +167,13 @@ export class NovaHyperMind {
     spec?: string;
     category?: string;
   }): { passed: boolean; violations: ComplianceViolation[]; reason: string } {
-    const combined = `${input.memo || ''} ${input.spec || ''} ${input.category || ''}`.toLowerCase();
+    const rawCombined = `${input.memo || ''} ${input.spec || ''} ${input.category || ''}`.toLowerCase();
+    const combined = rawCombined
+      .replace(/\b(0%|zero|no)\s+interest\b/g, 'halal_compliant')
+      .replace(/\binterest[-\s]?free\b/g, 'halal_compliant')
+      .replace(/\briba[-\s]?free\b/g, 'halal_compliant')
+      .replace(/\b(no|zero)[-\s]+gambling\b/g, 'halal_compliant')
+      .replace(/\bgambling[-\s]?free\b/g, 'halal_compliant');
     const violations: ComplianceViolation[] = [];
 
     for (const kw of [...NovaPolicy.ribaKeywords, 'lending', 'yield farming', 'usury']) {
@@ -293,6 +299,32 @@ export class NovaHyperMind {
       allowed: true,
       reason: `HyperGuard passed: ${projected.toLocaleString()} NVC is within 0.01% fair distribution cap.`,
       riskScore: 8,
+    };
+  }
+
+  public registerCitizenDevice(wallet: string, deviceFingerprint: string): { allowed: boolean; reason: string } {
+    const cleanWallet = wallet.trim();
+    const cleanDevice = deviceFingerprint.trim();
+    if (!cleanWallet || !cleanDevice) {
+      return { allowed: false, reason: 'Citizen ID and unique device fingerprint are required.' };
+    }
+    const existingOwner = this.deviceKycRegistry.get(cleanDevice);
+    if (existingOwner && existingOwner.toLowerCase() !== cleanWallet.toLowerCase()) {
+      this.bumpModule('whale-sybil-guard');
+      this.recordLog(
+        'Anti-Whale & Sybil HyperGuard',
+        `Blocked Duplicate KYC Registration — Device ${cleanDevice} already bound to ${existingOwner}.`,
+        'blocked',
+      );
+      return {
+        allowed: false,
+        reason: `Anti-Sybil HyperGuard: Device "${cleanDevice}" is already verified for 1-KYC Citizen ${existingOwner}. 1 Person = 1 Account strictly enforced.`,
+      };
+    }
+    this.deviceKycRegistry.set(cleanDevice, cleanWallet);
+    return {
+      allowed: true,
+      reason: `Verified 1-KYC Citizen ${cleanWallet} bound to device ${cleanDevice}.`,
     };
   }
 

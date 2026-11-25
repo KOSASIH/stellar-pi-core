@@ -14,9 +14,13 @@ import {
   Power,
   Rocket,
   Scale,
+  Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Smartphone,
+  Users,
+  Vote,
   XCircle,
   Zap,
 } from 'lucide-react';
@@ -30,7 +34,7 @@ import {
   type NovaTransaction,
 } from '../../shared/novaPolicy.ts';
 
-type TabId = 'transactions' | 'apps' | 'oracle' | 'audit' | 'hyper';
+type TabId = 'transactions' | 'apps' | 'oracle' | 'audit' | 'hyper' | 'citizens';
 
 function SupernovaIcon() {
   return (
@@ -94,6 +98,21 @@ export default function App() {
   // Predictive Governance AI state
   const [proposalText, setProposalText] = useState('Allow external exchange price drift to $3.20');
   const [votePrediction, setVotePrediction] = useState<string | null>(null);
+
+  // Ledger & Audit search/filter state
+  const [txFilter, setTxFilter] = useState<'all' | 'accepted' | 'rejected'>('all');
+  const [txSearch, setTxSearch] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
+
+  // Citizens, Mobile Mining & Community Voting state
+  const [newCitizenName, setNewCitizenName] = useState('');
+  const [newCitizenRegion, setNewCitizenRegion] = useState('Asia-Pacific (ID)');
+  const [newCitizenDevice, setNewCitizenDevice] = useState('DEV-MOBILE-NEW-88');
+  const [selectedCitizenId, setSelectedCitizenId] = useState('NVC-MINER-RASPI-09');
+  const [mineAmountNvc, setMineAmountNvc] = useState('0.286624');
+  const [newProposalTitle, setNewProposalTitle] = useState('');
+  const [newProposalDesc, setNewProposalDesc] = useState('');
+  const [converterNvc, setConverterNvc] = useState('10');
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -304,6 +323,103 @@ export default function App() {
     });
   }
 
+  async function handleRegisterCitizen(e: FormEvent) {
+    e.preventDefault();
+    setFeedback(null);
+    const res = await fetch('/api/citizens/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        displayName: newCitizenName,
+        region: newCitizenRegion,
+        deviceFingerprint: newCitizenDevice,
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setSelectedCitizenId(data.citizen.id);
+      setNewCitizenName('');
+      setNewCitizenDevice(`DEV-MOBILE-${Math.floor(100 + Math.random() * 899)}`);
+      setFeedback({
+        kind: 'success',
+        text: `1-KYC Citizen ${data.citizen.id} (${data.citizen.displayName}) verified on SCP.`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Citizen registration blocked.' });
+    }
+  }
+
+  async function handleMobileMine(citizenId: string) {
+    setFeedback(null);
+    const res = await fetch('/api/citizens/mine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        citizenId,
+        rewardNvc: Number(mineAmountNvc),
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setFeedback({
+        kind: 'success',
+        text: `${data.citizen.id} mined ${data.transaction.amount} NVC (${formatMicronNova(data.transaction.amount)} = ${formatUsd(nvcToUsd(data.transaction.amount))}) via low-energy mobile SCP.`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Mining reward blocked.' });
+    }
+  }
+
+  async function handleCreateProposal(e: FormEvent) {
+    e.preventDefault();
+    setFeedback(null);
+    const res = await fetch('/api/governance/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newProposalTitle,
+        description: newProposalDesc,
+        proposer: selectedCitizenId,
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setNewProposalTitle('');
+      setNewProposalDesc('');
+      setFeedback({
+        kind: 'success',
+        text: `Proposal "${data.proposal.title}" opened for 1-Person = 1-Vote Citizen ballot.`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Proposal rejected by compliance filter.' });
+    }
+  }
+
+  async function handleCastVote(proposalId: string, vote: 'yes' | 'no') {
+    setFeedback(null);
+    const res = await fetch(`/api/governance/proposals/${proposalId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        citizenId: selectedCitizenId,
+        vote,
+      }),
+    });
+    const data = await res.json();
+    if (data.snapshot) setSnapshot(data.snapshot);
+    if (res.ok) {
+      setFeedback({
+        kind: 'success',
+        text: `${selectedCitizenId} cast 1-KYC vote (${vote.toUpperCase()}) on "${data.proposal.title}" · Status: ${data.proposal.status}.`,
+      });
+    } else {
+      setFeedback({ kind: 'error', text: data.error || 'Vote rejected.' });
+    }
+  }
+
   if (loading || !snapshot) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-300">
@@ -469,6 +585,7 @@ export default function App() {
               { id: 'transactions', label: 'Stablecoin & AHI AI Filter', icon: Cpu },
               { id: 'apps', label: 'Autonomous App Builder', icon: AppWindow },
               { id: 'oracle', label: 'Oracle & Mainnet Governor', icon: Globe2 },
+              { id: 'citizens', label: 'Citizens, Mining & Reserves', icon: Users },
               { id: 'audit', label: 'Immutable Audit Trail', icon: ShieldCheck },
               { id: 'hyper', label: 'Hyper-Intelligence', icon: Brain },
             ] as const
@@ -480,7 +597,7 @@ export default function App() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
                   active
                     ? 'bg-amber-500 text-slate-950'
                     : 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800'
@@ -653,15 +770,59 @@ export default function App() {
             </form>
 
             <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-white">Ledger & Filter Verdicts</h2>
-                <span className="text-xs text-slate-400">
-                  {snapshot.transactions.length} recorded · SCP Consensus
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">Ledger & Filter Verdicts</h2>
+                  <p className="text-xs text-slate-400">
+                    {snapshot.transactions.length} recorded · SCP Consensus
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={txSearch}
+                      onChange={(e) => setTxSearch(e.target.value)}
+                      placeholder="Search address or memo..."
+                      className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-44"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-lg">
+                    {(['all', 'accepted', 'rejected'] as const).map((statusOption) => (
+                      <button
+                        key={statusOption}
+                        type="button"
+                        onClick={() => setTxFilter(statusOption)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium capitalize transition-colors ${
+                          txFilter === statusOption
+                            ? 'bg-amber-500 text-slate-950'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {statusOption}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
-                {snapshot.transactions.map((tx: NovaTransaction) => (
+                {snapshot.transactions
+                  .filter((tx) => (txFilter === 'all' ? true : tx.status === txFilter))
+                  .filter((tx) => {
+                    const q = txSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      tx.id.toLowerCase().includes(q) ||
+                      tx.sender.toLowerCase().includes(q) ||
+                      tx.recipient.toLowerCase().includes(q) ||
+                      tx.memo.toLowerCase().includes(q) ||
+                      tx.source.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((tx: NovaTransaction) => (
                   <div
                     key={tx.id}
                     className={`rounded-lg border p-3.5 ${
@@ -991,20 +1152,395 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* 1-Person = 1-Vote Community Governance Ballots */}
+            <div className="lg:col-span-12 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    1-Person = 1-Vote Community Governance Ballots
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Every 1-KYC verified Citizen casts one equal vote. Proposals violating $3.14, Zero Riba, or Zero Gambling are blocked automatically.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <span>Active Voter:</span>
+                  <select
+                    value={selectedCitizenId}
+                    onChange={(e) => setSelectedCitizenId(e.target.value)}
+                    className="rounded-lg bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-white"
+                  >
+                    {snapshot.citizens.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.displayName} ({c.id}) · Rep {c.reputationScore}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <form
+                  onSubmit={handleCreateProposal}
+                  className="lg:col-span-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4 space-y-3 h-fit"
+                >
+                  <h3 className="text-sm font-semibold text-white">Submit Community Proposal</h3>
+                  <input
+                    type="text"
+                    value={newProposalTitle}
+                    onChange={(e) => setNewProposalTitle(e.target.value)}
+                    placeholder="Proposal title..."
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
+                    required
+                  />
+                  <textarea
+                    rows={2}
+                    value={newProposalDesc}
+                    onChange={(e) => setNewProposalDesc(e.target.value)}
+                    placeholder="Describe policy or real-economy upgrade..."
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs px-3 py-2"
+                  >
+                    Open Citizen Ballot
+                  </button>
+                </form>
+
+                <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {snapshot.proposals.map((prop) => {
+                    const alreadyVoted = prop.voters.includes(selectedCitizenId);
+                    return (
+                      <div
+                        key={prop.id}
+                        className="rounded-lg border border-slate-800 bg-slate-950/70 p-4 flex flex-col justify-between gap-3"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
+                            <span>{prop.category}</span>
+                            <span
+                              className={`font-medium capitalize ${
+                                prop.status === 'passed'
+                                  ? 'text-emerald-300'
+                                  : prop.status === 'rejected'
+                                    ? 'text-rose-300'
+                                    : 'text-amber-300'
+                              }`}
+                            >
+                              {prop.status}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-semibold text-white">{prop.title}</h4>
+                          <p className="text-xs text-slate-400">{prop.description}</p>
+                          <p className="text-[11px] text-amber-300/90">{prop.aiForecast}</p>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                          <span className="text-xs tabular-nums text-slate-300">
+                            Yes: <strong className="text-emerald-300">{prop.yesVotes}</strong> · No:{' '}
+                            <strong className="text-rose-300">{prop.noVotes}</strong>
+                          </span>
+                          {prop.status === 'open' ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={alreadyVoted}
+                                onClick={() => handleCastVote(prop.id, 'yes')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs disabled:opacity-40"
+                              >
+                                <Vote className="w-3 h-3" />
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                disabled={alreadyVoted}
+                                onClick={() => handleCastVote(prop.id, 'no')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-200 text-xs disabled:opacity-40"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-500">Ballot finalized</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: 1-KYC Citizens, Mobile SCP Mining & 1.5x Reserve Proof */}
+        {activeTab === 'citizens' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* 1-KYC Citizen Onboarding & Anti-Sybil Guard */}
+              <form
+                onSubmit={handleRegisterCitizen}
+                className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
+              >
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    1-Person = 1-KYC Citizen Onboarding
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Mobile-first fair distribution protected by Anti-Sybil HyperGuard and 0.01% max wallet cap (10M NVC).
+                  </p>
+                </div>
+
+                <label className="block text-xs text-slate-300 space-y-1">
+                  <span>Citizen Full Name</span>
+                  <input
+                    type="text"
+                    value={newCitizenName}
+                    onChange={(e) => setNewCitizenName(e.target.value)}
+                    placeholder="e.g. Tariq Al-Mansoor"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
+                    required
+                  />
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-xs text-slate-300 space-y-1">
+                    <span>Region</span>
+                    <select
+                      value={newCitizenRegion}
+                      onChange={(e) => setNewCitizenRegion(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
+                    >
+                      <option value="Asia-Pacific (ID)">Asia-Pacific (ID)</option>
+                      <option value="Middle East (AE)">Middle East (AE)</option>
+                      <option value="Europe (EU)">Europe (EU)</option>
+                      <option value="North America (US)">North America (US)</option>
+                      <option value="Africa (NG)">Africa (NG)</option>
+                    </select>
+                  </label>
+                  <label className="block text-xs text-slate-300 space-y-1">
+                    <span>Mobile Device ID</span>
+                    <input
+                      type="text"
+                      value={newCitizenDevice}
+                      onChange={(e) => setNewCitizenDevice(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm font-mono text-white"
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5"
+                  >
+                    Verify 1-KYC Citizen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCitizenName('Sybil Clone Attempt');
+                      setNewCitizenDevice('DEV-RASPI-09');
+                    }}
+                    className="rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-medium px-3 py-2.5"
+                  >
+                    Test Sybil Device
+                  </button>
+                </div>
+
+                {/* Live NVC <-> USD <-> Micron Nova Utility Converter */}
+                <div className="pt-4 border-t border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-white">Real-Economy Settlement Converter</span>
+                    <span className="text-slate-400">0% Interest · $0.001 SCP Fee</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={converterNvc}
+                      onChange={(e) => setConverterNvc(e.target.value)}
+                      className="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm tabular-nums text-white"
+                    />
+                    <div className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs tabular-nums">
+                      <span className="text-slate-400 block">USD Value</span>
+                      <strong className="text-emerald-300">
+                        {formatUsd(nvcToUsd(Number(converterNvc) || 0))}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs tabular-nums">
+                      <span className="text-slate-400 block">Micron Nova</span>
+                      <strong className="text-amber-300">
+                        {formatMicronNova(Number(converterNvc) || 0)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* Low-Energy Mobile Phone Mining Registry */}
+              <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-white">
+                      Mobile SCP Mining & Verified Citizens ({snapshot.metrics.verifiedCitizens})
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Zero Proof-of-Work waste. Every mobile mining payout is validated by NovaHyperMind at $3.14.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <span>Mine Reward:</span>
+                    <select
+                      value={mineAmountNvc}
+                      onChange={(e) => setMineAmountNvc(e.target.value)}
+                      className="rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white tabular-nums"
+                    >
+                      <option value="0.286624">0.286624 NVC (286,624 µNVC)</option>
+                      <option value="1">1.00 NVC (1,000,000 µNVC)</option>
+                      <option value="5">5.00 NVC (5,000,000 µNVC)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="py-2 pr-3 font-medium">Citizen & Device</th>
+                        <th className="py-2 px-3 font-medium">Region</th>
+                        <th className="py-2 px-3 font-medium text-right">Reputation</th>
+                        <th className="py-2 px-3 font-medium text-right">Balance (NVC / USD)</th>
+                        <th className="py-2 pl-3 font-medium text-right">Mobile SCP</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/70">
+                      {snapshot.citizens.map((citizen) => (
+                        <tr key={citizen.id} className="hover:bg-slate-800/30">
+                          <td className="py-3 pr-3">
+                            <div className="font-medium text-white">{citizen.displayName}</div>
+                            <div className="font-mono text-[11px] text-slate-400">
+                              {citizen.id} · {citizen.deviceFingerprint}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-slate-300">{citizen.region}</td>
+                          <td className="py-3 px-3 text-right tabular-nums text-emerald-300 font-medium">
+                            {citizen.reputationScore}/100
+                          </td>
+                          <td className="py-3 px-3 text-right tabular-nums">
+                            <div className="text-white font-semibold">
+                              {citizen.balanceNvc.toFixed(4)} NVC
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {formatUsd(nvcToUsd(citizen.balanceNvc))} · {citizen.miningSessions} sessions
+                            </div>
+                          </td>
+                          <td className="py-3 pl-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleMobileMine(citizen.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-medium whitespace-nowrap"
+                            >
+                              <Smartphone className="w-3.5 h-3.5" />
+                              Mine NVC
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* 1.5x Reserve Proof-of-Collateral Ledger */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-white">
+                    1.5x Real-Economy Reserve Proof-of-Collateral
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    $471.00B audited Halal real-economy assets backing $314.00B NVC network peg value ({snapshot.metrics.collateralRatioActual}x actual vs {constants.collateralRatio}x target).
+                  </p>
+                </div>
+                <span className="text-xs font-medium text-emerald-300">
+                  100% Riba-Free Custody · Audited
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400">
+                      <th className="py-2 pr-3 font-medium">Asset Class</th>
+                      <th className="py-2 px-3 font-medium">Custody & Structure</th>
+                      <th className="py-2 px-3 font-medium text-right">Share</th>
+                      <th className="py-2 px-3 font-medium text-right">Audited Backing (USD)</th>
+                      <th className="py-2 pl-3 font-medium text-right">Sharia Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {snapshot.collateralReserves.map((res) => (
+                      <tr key={res.id} className="hover:bg-slate-800/30">
+                        <td className="py-3 pr-3 font-medium text-white">{res.assetClass}</td>
+                        <td className="py-3 px-3 text-slate-300">{res.custodyType}</td>
+                        <td className="py-3 px-3 text-right tabular-nums text-amber-300 font-medium">
+                          {res.sharePercent}%
+                        </td>
+                        <td className="py-3 px-3 text-right tabular-nums text-white font-semibold">
+                          ${(res.backingUsd / 1e9).toFixed(1)}B
+                        </td>
+                        <td className="py-3 pl-3 text-right text-emerald-300 font-medium">
+                          {res.halalCertified ? 'Halal · 0% Interest' : 'Pending'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
         {/* TAB 4: Immutable Audit Trail */}
         {activeTab === 'audit' && (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white">
-                SHA-256 Audit Trail Logger
-              </h2>
-              <span className="text-xs text-slate-400">{snapshot.auditLog.length} entries</span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-white">
+                  SHA-256 Audit Trail Logger
+                </h2>
+                <span className="text-xs text-slate-400">{snapshot.auditLog.length} entries</span>
+              </div>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Filter audit log..."
+                  className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-56"
+                />
+              </div>
             </div>
             <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
-              {snapshot.auditLog.map((entry) => (
+              {snapshot.auditLog
+                .filter((entry) => {
+                  const q = auditSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    entry.module.toLowerCase().includes(q) ||
+                    entry.action.toLowerCase().includes(q) ||
+                    entry.detail.toLowerCase().includes(q)
+                  );
+                })
+                .map((entry) => (
                 <div
                   key={entry.id}
                   className="rounded-lg border border-slate-800 bg-slate-950/70 p-3 flex flex-col gap-1"
@@ -1014,7 +1550,7 @@ export default function App() {
                       <span className="font-semibold text-amber-300">{entry.module}</span>
                       <span className="font-mono text-slate-400">{entry.action}</span>
                     </div>
-                    <span className="text-slate-500">
+                    <span className="text-slate-500 tabular-nums">
                       {new Date(entry.timestamp).toLocaleTimeString()}
                     </span>
                   </div>

@@ -16,7 +16,7 @@ Formerly Stellar Pi Core (PI). Now fully independent as Stellar Nova Core (NVC).
 - **Total Supply**: `100,000,000,000 NVC` (100B NVC)
 - **Total Network Value at Peg**: `$314 Billion`
 - **Smallest Unit**: Micron Nova (`1 NVC = 1,000,000 µNVC`, e.g., `0.286624 NVC = 286,624 µNVC`)
-- **Collateral Target**: `1.5x` collateral ratio for long-term trust
+- **Collateral Target**: `1.5x` collateral ratio (`$471B` real-economy Halal reserves) for long-term trust
 - **Consensus & Mining**: Stellar Consensus Protocol (SCP), low energy, mobile phone mining with `1 Person = 1 KYC Account` anti-whale fair distribution
 - **Auditability**: SHA-256 Immutable Audit Trail Logger
 
@@ -53,7 +53,7 @@ Stellar Nova Core is governed by **NovaHyperMind** (`server/hypermind.ts`), a ce
 
 ## API Endpoints
 
-- `GET /api/ecosystem` — Full ecosystem snapshot (including `hyperMindStatus`, `threatsBlocked`, `networkHealth`, `whaleProof`, `scamBlocked`, `stabilizerStatus`, `hyperModules`, `hyperMindLog`)
+- `GET /api/ecosystem` — Full ecosystem snapshot (including `hyperMindStatus`, `threatsBlocked`, `networkHealth`, `whaleProof`, `scamBlocked`, `stabilizerStatus`, `hyperModules`, `hyperMindLog`, `citizens`, `proposals`, `collateralReserves`)
 - `GET /api/hyper/oracle-shield` — Oracle Predictive Shield status (`?simulate=true` tests collusion prediction & self-healing)
 - `POST /api/hyper/whale-check` — Anti-Whale & Anti-Sybil HyperGuard check (`{ wallet, amount, deviceFingerprint? }`)
 - `POST /api/hyper/compliance-check` — Hyper-Compliance & Anti-Scam HyperScanner check (`{ memo, spec }`)
@@ -64,6 +64,11 @@ Stellar Nova Core is governed by **NovaHyperMind** (`server/hypermind.ts`), a ce
 - `POST /api/apps/generate` — Generate and deploy an NVC-exclusive, scam-free, gambling-free, riba-free app
 - `POST /api/apps/:id/halt` — Halt or resume a deployed ecosystem app
 - `POST /api/oracle/verify` — Verify or simulate value deviation on a regional oracle node
+- `POST /api/citizens/register` — Onboard a 1-KYC Citizen with Anti-Sybil device binding
+- `POST /api/citizens/mine` — Issue a low-energy Mobile SCP mining reward in NVC and Micron Nova (`µNVC`)
+- `POST /api/governance/proposals` — Create a compliance-screened 1-Person = 1-Vote community proposal
+- `POST /api/governance/proposals/:id/vote` — Cast a 1-KYC Citizen ballot (`yes` or `no`)
+- `GET /api/collateral/proof` — Audited 1.5x real-economy Halal reserve proof breakdown
 - `POST /api/governance/audit` — Run `MainnetGovernor` ecosystem compliance audit
 - `POST /api/governance/mainnet-launch` — Execute `MainnetGovernor` launch when all oracle nodes align at `$3.14`
 

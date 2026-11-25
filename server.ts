@@ -7,7 +7,10 @@ import {
   NovaPolicy,
   isValidNovaValue,
   type AuditEntry,
+  type CitizenAccount,
+  type CollateralReserveItem,
   type EcosystemSnapshot,
+  type GovernanceProposal,
   type GovernanceRules,
   type NovaAppRecord,
   type NovaTransaction,
@@ -33,6 +36,9 @@ const state: {
   apps: NovaAppRecord[];
   oracleNodes: OracleNode[];
   auditLog: AuditEntry[];
+  citizens: CitizenAccount[];
+  proposals: GovernanceProposal[];
+  collateralReserves: CollateralReserveItem[];
 } = {
   mainnetLaunched: false,
   complianceBreached: false,
@@ -166,7 +172,115 @@ const state: {
     },
   ],
   auditLog: [],
+  citizens: [
+    {
+      id: 'NVC-MINER-RASPI-09',
+      displayName: 'Amina Rahmawati',
+      region: 'Asia-Pacific (ID)',
+      deviceFingerprint: 'DEV-RASPI-09',
+      kycVerified: true,
+      reputationScore: 98,
+      balanceNvc: 142.5,
+      minedTotalNvc: 142.5,
+      miningSessions: 57,
+      lastMinedAt: new Date(nowMs - 1000 * 60 * 14).toISOString(),
+    },
+    {
+      id: 'NVC-CITIZEN-US-14',
+      displayName: 'Marcus Vance',
+      region: 'North America (US)',
+      deviceFingerprint: 'DEV-MOBILE-US14',
+      kycVerified: true,
+      reputationScore: 95,
+      balanceNvc: 84.28,
+      minedTotalNvc: 84.28,
+      miningSessions: 34,
+      lastMinedAt: new Date(nowMs - 1000 * 60 * 29).toISOString(),
+    },
+    {
+      id: 'NVC-CITIZEN-EU-21',
+      displayName: 'Elena Lindqvist',
+      region: 'Europe (EU)',
+      deviceFingerprint: 'DEV-MOBILE-EU21',
+      kycVerified: true,
+      reputationScore: 97,
+      balanceNvc: 118.0,
+      minedTotalNvc: 118.0,
+      miningSessions: 48,
+      lastMinedAt: new Date(nowMs - 1000 * 60 * 41).toISOString(),
+    },
+  ],
+  proposals: [
+    {
+      id: 'prop-nvc-101',
+      title: 'Enforce 0.01% Max Wallet Cap Across Cross-App Escrows',
+      description: 'Locks cumulative NVC balances inside Autonomous App escrows to the 10,000,000 NVC anti-whale ceiling.',
+      proposer: 'NVC-CITIZEN-EU-21',
+      category: 'Compliance Policy',
+      status: 'open',
+      yesVotes: 1,
+      noVotes: 0,
+      voters: ['NVC-CITIZEN-EU-21'],
+      aiForecast: '91% projected APPROVE (aligned with $3.14 peg & anti-whale fairness)',
+      createdAt: new Date(nowMs - 1000 * 60 * 35).toISOString(),
+    },
+    {
+      id: 'prop-nvc-102',
+      title: 'Allow 2% External Liquidity Slippage Above $3.14',
+      description: 'Experimental request to permit external market deviation up to $3.20 on cross-border gateways.',
+      proposer: 'NVC-CITIZEN-US-14',
+      category: 'Oracle Alignment',
+      status: 'open',
+      yesVotes: 0,
+      noVotes: 1,
+      voters: ['NVC-MINER-RASPI-09'],
+      aiForecast: '94% projected REJECT (violates $3.14 mathematical identity)',
+      createdAt: new Date(nowMs - 1000 * 60 * 22).toISOString(),
+    },
+  ],
+  collateralReserves: [
+    {
+      id: 'res-gold-sukuk',
+      assetClass: 'Allocated Physical Gold & Halal Sukuk',
+      custodyType: 'Sovereign Audited Vaults',
+      backingUsd: 188_400_000_000,
+      sharePercent: 40,
+      halalCertified: true,
+      lastAuditedAt: new Date(nowMs - 1000 * 60 * 60).toISOString(),
+    },
+    {
+      id: 'res-green-infra',
+      assetClass: 'Solar & Desalination Infrastructure Receivables',
+      custodyType: 'Real-Economy Asset Trust',
+      backingUsd: 141_300_000_000,
+      sharePercent: 30,
+      halalCertified: true,
+      lastAuditedAt: new Date(nowMs - 1000 * 60 * 60).toISOString(),
+    },
+    {
+      id: 'res-trade-escrow',
+      assetClass: 'Verified Supply-Chain Inventory Bills',
+      custodyType: '0% Interest Trade Murabaha Pool',
+      backingUsd: 94_200_000_000,
+      sharePercent: 20,
+      halalCertified: true,
+      lastAuditedAt: new Date(nowMs - 1000 * 60 * 60).toISOString(),
+    },
+    {
+      id: 'res-liquidity-buffer',
+      assetClass: 'Instant USD Settlement Cash Treasury',
+      custodyType: 'Ring-Fenced Tier-1 Custody',
+      backingUsd: 47_100_000_000,
+      sharePercent: 10,
+      halalCertified: true,
+      lastAuditedAt: new Date(nowMs - 1000 * 60 * 60).toISOString(),
+    },
+  ],
 };
+
+for (const c of state.citizens) {
+  hyperMind.registerCitizenDevice(c.id, c.deviceFingerprint);
+}
 
 function appendAudit(moduleName: string, action: string, verdict: AuditEntry['verdict'], detail: string, offsetMs = 0) {
   const timestamp = new Date(Date.now() - offsetMs).toISOString();
@@ -232,6 +346,9 @@ function buildSnapshot(): EcosystemSnapshot {
   const gamblingBlocked = state.transactions.filter((t) => t.gamblingRejected).length;
   const exchangeBlocked = state.transactions.filter((t) => t.exchangeRejected).length;
 
+  const totalBackingUsd = state.collateralReserves.reduce((sum, item) => sum + item.backingUsd, 0);
+  const collateralRatioActual = Number((totalBackingUsd / NovaPolicy.networkValueAtPegUsd).toFixed(2));
+
   return {
     constants: NovaPolicy,
     mainnetLaunched: state.mainnetLaunched,
@@ -256,6 +373,9 @@ function buildSnapshot(): EcosystemSnapshot {
       activeApps,
       verifiedOracleNodes,
       isolatedOracleNodes: flaggedOracleNodes,
+      verifiedCitizens: state.citizens.filter((c) => c.kycVerified).length,
+      openProposals: state.proposals.filter((p) => p.status === 'open').length,
+      collateralRatioActual,
     },
     transactions: state.transactions,
     apps: state.apps,
@@ -264,6 +384,9 @@ function buildSnapshot(): EcosystemSnapshot {
     hyperModules: hyperMind.modules,
     hyperMindLog: hyperMind.liveLog,
     bannedCreators: Array.from(hyperMind.bannedCreators),
+    citizens: state.citizens,
+    proposals: state.proposals,
+    collateralReserves: state.collateralReserves,
   };
 }
 
@@ -659,6 +782,24 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
     const shield = hyperMind.predictMarketAttack(state.oracleNodes, false);
     if (shield.selfHealed) {
       appendAudit('Oracle', 'PREDICTIVE_SHIELD_SELF_HEAL', 'accepted', `${shield.status}: ${shield.predictedAttack}`);
+    } else {
+      const proposalTitle = `Restore ${node.id} to $3.14 Peg`;
+      const exists = state.proposals.some((p) => p.status === 'open' && p.title === proposalTitle);
+      if (!exists) {
+        state.proposals.unshift({
+          id: `prop-oracle-${Date.now().toString(36)}`,
+          title: proposalTitle,
+          description: `Oracle ${node.id} reported $${reportedValueUsd.toFixed(2)}. Vote APPROVE to enforce mandatory $3.14 restoration.`,
+          proposer: 'Hyper-Economic Stabilizer',
+          category: 'Oracle Alignment',
+          status: 'open',
+          yesVotes: 1,
+          noVotes: 0,
+          voters: ['NVC-MINER-RASPI-09'],
+          aiForecast: '96% projected APPROVE ($3.14 alignment mandate)',
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
   } else {
     node.status = 'verified';
@@ -671,6 +812,222 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
   }
 
   res.json({ node, snapshot: buildSnapshot() });
+});
+
+// 1-KYC Citizen Registry & Low-Energy Mobile Phone Mining
+app.post('/api/citizens/register', (req: Request, res: Response) => {
+  const displayName = String(req.body?.displayName || '').trim();
+  const region = String(req.body?.region || 'Global').trim();
+  const deviceFingerprint = String(req.body?.deviceFingerprint || '').trim();
+
+  if (!displayName || !deviceFingerprint) {
+    res.status(400).json({ error: 'Display name and unique device fingerprint are required for 1-KYC verification.' });
+    return;
+  }
+
+  const citizenId = `NVC-CITIZEN-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const sybilCheck = hyperMind.registerCitizenDevice(citizenId, deviceFingerprint);
+  if (!sybilCheck.allowed) {
+    appendAudit('HyperMind', 'SYBIL_REGISTER_BLOCKED', 'rejected', sybilCheck.reason);
+    res.status(403).json({ error: sybilCheck.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const citizen: CitizenAccount = {
+    id: citizenId,
+    displayName,
+    region,
+    deviceFingerprint,
+    kycVerified: true,
+    reputationScore: 90,
+    balanceNvc: 0,
+    minedTotalNvc: 0,
+    miningSessions: 0,
+    lastMinedAt: new Date().toISOString(),
+  };
+
+  state.citizens.unshift(citizen);
+  appendAudit(
+    'Nova',
+    'CITIZEN_KYC_VERIFIED',
+    'accepted',
+    `1-KYC Citizen ${citizen.id} (${citizen.displayName}) verified on device ${citizen.deviceFingerprint}.`,
+  );
+
+  res.status(201).json({ citizen, snapshot: buildSnapshot() });
+});
+
+app.post('/api/citizens/mine', (req: Request, res: Response) => {
+  const citizenId = String(req.body?.citizenId || '').trim();
+  const rewardNvc = Number(req.body?.rewardNvc ?? 0.286624);
+
+  const citizen = state.citizens.find((c) => c.id === citizenId);
+  if (!citizen || !Number.isFinite(rewardNvc) || rewardNvc <= 0 || rewardNvc > 50) {
+    res.status(400).json({ error: 'Valid verified Citizen ID and mobile mining reward (0 < NVC <= 50) required.' });
+    return;
+  }
+
+  const analysis = hyperMind.analyzeTransaction({
+    sender: 'SCP-MOBILE-MINING-POOL',
+    recipient: citizen.id,
+    amount: rewardNvc,
+    source: 'mining',
+    memo: `Mobile SCP uptime mining reward (${citizen.deviceFingerprint})`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    existingTransactions: state.transactions,
+  });
+
+  if (!analysis.isSafe) {
+    res.status(403).json({ error: analysis.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const tx: NovaTransaction = {
+    id: `tx-mine-${Date.now().toString(36)}`,
+    sender: 'SCP-MOBILE-MINING-POOL',
+    recipient: citizen.id,
+    amount: rewardNvc,
+    micronNova: Math.round(rewardNvc * NovaPolicy.micronNovaPerNvc),
+    source: 'mining',
+    memo: `Mobile phone SCP mining (${citizen.deviceFingerprint})`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    status: 'accepted',
+    reason: analysis.reason,
+    ribaRejected: false,
+    gamblingRejected: false,
+    exchangeRejected: false,
+    riskScore: analysis.riskScore,
+    purityScore: analysis.purityScore,
+    hash: sha256({ citizenId: citizen.id, rewardNvc, timestamp }),
+    timestamp,
+  };
+
+  citizen.balanceNvc = Number((citizen.balanceNvc + rewardNvc).toFixed(6));
+  citizen.minedTotalNvc = Number((citizen.minedTotalNvc + rewardNvc).toFixed(6));
+  citizen.miningSessions += 1;
+  citizen.reputationScore = Math.min(100, citizen.reputationScore + 1);
+  citizen.lastMinedAt = timestamp;
+
+  state.transactions.unshift(tx);
+  appendAudit(
+    'Nova',
+    'MOBILE_SCP_MINE',
+    'accepted',
+    `${citizen.id} mined ${rewardNvc} NVC (${tx.micronNova.toLocaleString()} µNVC) via low-energy mobile SCP.`,
+  );
+
+  res.status(201).json({ citizen, transaction: tx, snapshot: buildSnapshot() });
+});
+
+// Community Governance (1 Person = 1 Vote + Reputation)
+app.post('/api/governance/proposals', (req: Request, res: Response) => {
+  const title = String(req.body?.title || '').trim();
+  const description = String(req.body?.description || '').trim();
+  const proposer = String(req.body?.proposer || state.citizens[0]?.id || 'NVC-CITIZEN').trim();
+  const category = (req.body?.category || 'Real Economy') as GovernanceProposal['category'];
+
+  if (!title || !description) {
+    res.status(400).json({ error: 'Proposal title and description are required.' });
+    return;
+  }
+
+  const compliance = hyperMind.scanCompliance({ memo: title, spec: description });
+  if (!compliance.passed) {
+    appendAudit('RibaGuard', 'PROPOSAL_REJECTED', 'rejected', `${title}: ${compliance.reason}`);
+    res.status(403).json({ error: compliance.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const prediction = hyperMind.predictGovernanceVote(`${title} ${description}`);
+  const proposal: GovernanceProposal = {
+    id: `prop-${Date.now().toString(36)}`,
+    title,
+    description,
+    proposer,
+    category,
+    status: 'open',
+    yesVotes: 0,
+    noVotes: 0,
+    voters: [],
+    aiForecast: prediction.summary,
+    createdAt: new Date().toISOString(),
+  };
+
+  state.proposals.unshift(proposal);
+  appendAudit('Governor', 'PROPOSAL_CREATED', 'info', `${proposer} submitted "${title}".`);
+  res.status(201).json({ proposal, snapshot: buildSnapshot() });
+});
+
+app.post('/api/governance/proposals/:id/vote', (req: Request, res: Response) => {
+  const proposal = state.proposals.find((p) => p.id === req.params.id);
+  if (!proposal) {
+    res.status(404).json({ error: 'Proposal not found.' });
+    return;
+  }
+  if (proposal.status !== 'open') {
+    res.status(400).json({ error: `Proposal is already ${proposal.status}.` });
+    return;
+  }
+
+  const citizenId = String(req.body?.citizenId || '').trim();
+  const vote = req.body?.vote === 'yes' ? 'yes' : req.body?.vote === 'no' ? 'no' : null;
+  const citizen = state.citizens.find((c) => c.id === citizenId && c.kycVerified);
+  if (!citizen || !vote) {
+    res.status(400).json({ error: 'Valid 1-KYC Citizen ID and vote ("yes" or "no") required.' });
+    return;
+  }
+
+  if (proposal.voters.includes(citizen.id)) {
+    res.status(409).json({ error: `Citizen ${citizen.id} has already cast their 1-Person-1-Vote ballot.` });
+    return;
+  }
+
+  proposal.voters.push(citizen.id);
+  if (vote === 'yes') {
+    proposal.yesVotes += 1;
+  } else {
+    proposal.noVotes += 1;
+  }
+
+  // Quorum threshold: 2+ votes decides outcome immediately in console demo
+  const totalVotes = proposal.yesVotes + proposal.noVotes;
+  if (totalVotes >= 2 && proposal.yesVotes !== proposal.noVotes) {
+    const isDeviationRequest =
+      proposal.title.toLowerCase().includes('slippage') ||
+      proposal.title.toLowerCase().includes('3.20') ||
+      proposal.description.toLowerCase().includes('deviation');
+
+    if (proposal.yesVotes > proposal.noVotes && !isDeviationRequest) {
+      proposal.status = 'passed';
+      if (proposal.category === 'Oracle Alignment') {
+        hyperMind.selfHeal(state.oracleNodes);
+      }
+    } else {
+      proposal.status = 'rejected';
+    }
+  }
+
+  appendAudit(
+    'Governor',
+    'CITIZEN_VOTE',
+    proposal.status === 'rejected' ? 'rejected' : 'accepted',
+    `${citizen.id} voted ${vote.toUpperCase()} on "${proposal.title}" (Yes ${proposal.yesVotes} / No ${proposal.noVotes}, status: ${proposal.status}).`,
+  );
+
+  res.json({ proposal, snapshot: buildSnapshot() });
+});
+
+// 1.5x Reserve Proof Endpoint
+app.get('/api/collateral/proof', (_req: Request, res: Response) => {
+  const totalBackingUsd = state.collateralReserves.reduce((sum, item) => sum + item.backingUsd, 0);
+  res.json({
+    targetRatio: NovaPolicy.collateralRatio,
+    actualRatio: Number((totalBackingUsd / NovaPolicy.networkValueAtPegUsd).toFixed(2)),
+    networkPegValueUsd: NovaPolicy.networkValueAtPegUsd,
+    totalBackingUsd,
+    reserves: state.collateralReserves,
+  });
 });
 
 // MainnetGovernor: Audits oracle alignment, app compliance, and purity filter health

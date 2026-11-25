@@ -175,6 +175,43 @@ export interface HyperMindLogEntry {
   timestamp: string;
 }
 
+export interface CitizenAccount {
+  id: string;
+  displayName: string;
+  region: string;
+  deviceFingerprint: string;
+  kycVerified: boolean;
+  reputationScore: number;
+  balanceNvc: number;
+  minedTotalNvc: number;
+  miningSessions: number;
+  lastMinedAt: string;
+}
+
+export interface GovernanceProposal {
+  id: string;
+  title: string;
+  description: string;
+  proposer: string;
+  category: 'Oracle Alignment' | 'Compliance Policy' | 'Real Economy' | 'Protocol Upgrade';
+  status: 'open' | 'passed' | 'rejected';
+  yesVotes: number;
+  noVotes: number;
+  voters: string[];
+  aiForecast: string;
+  createdAt: string;
+}
+
+export interface CollateralReserveItem {
+  id: string;
+  assetClass: string;
+  custodyType: string;
+  backingUsd: number;
+  sharePercent: number;
+  halalCertified: boolean;
+  lastAuditedAt: string;
+}
+
 export interface EcosystemSnapshot {
   constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
@@ -199,6 +236,9 @@ export interface EcosystemSnapshot {
     activeApps: number;
     verifiedOracleNodes: number;
     isolatedOracleNodes: number;
+    verifiedCitizens: number;
+    openProposals: number;
+    collateralRatioActual: number;
   };
   transactions: NovaTransaction[];
   apps: NovaAppRecord[];
@@ -207,4 +247,8 @@ export interface EcosystemSnapshot {
   hyperModules: HyperModuleCard[];
   hyperMindLog: HyperMindLogEntry[];
   bannedCreators: string[];
+  citizens: CitizenAccount[];
+  proposals: GovernanceProposal[];
+  collateralReserves: CollateralReserveItem[];
 }
+
