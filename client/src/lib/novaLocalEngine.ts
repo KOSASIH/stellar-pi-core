@@ -738,3 +738,431 @@ export function applyLocalAppFallback(
     },
   };
 }
+
+export function applyLocalCitizenRegisterFallback(
+  prev: EcosystemSnapshot,
+  params: { displayName: string; region: string; deviceFingerprint: string },
+): { ok: boolean; citizen?: EcosystemSnapshot['citizens'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const cleanName = params.displayName.trim();
+  const cleanDevice = params.deviceFingerprint.trim();
+  const cleanRegion = params.region.trim() || 'Global';
+  if (!cleanName || !cleanDevice) {
+    return { ok: false, snapshot: prev, error: 'Citizen display name and device fingerprint are required.' };
+  }
+  const existing = prev.citizens.find(
+    (c) => c.deviceFingerprint.toLowerCase() === cleanDevice.toLowerCase(),
+  );
+  if (existing) {
+    const timestamp = new Date().toISOString();
+    return {
+      ok: false,
+      error: `Anti-Sybil HyperGuard: Device "${cleanDevice}" is already verified for 1-KYC Citizen ${existing.id}. 1 Person = 1 Account strictly enforced.`,
+      snapshot: {
+        ...prev,
+        threatsBlocked: prev.threatsBlocked + 1,
+        hyperModules: prev.hyperModules.map((m) =>
+          m.id === 'whale-sybil-guard' ? { ...m, threatsBlocked: m.threatsBlocked + 1 } : m,
+        ),
+        auditLog: [
+          {
+            id: `aud-sybil-${Date.now()}`,
+            module: 'HyperGuard',
+            action: 'SYBIL_DUPLICATE_BLOCKED',
+            verdict: 'rejected' as const,
+            detail: `Blocked duplicate device registration (${cleanDevice}) already bound to ${existing.id}.`,
+            hash: makeLocalHash(`sybil-${cleanDevice}-${timestamp}`),
+            timestamp,
+          },
+          ...prev.auditLog,
+        ].slice(0, 100),
+      },
+    };
+  }
+
+  const timestamp = new Date().toISOString();
+  const citizenId = `NVC-CITIZEN-${(prev.citizens.length + 10).toString().padStart(2, '0')}`;
+  const citizen = {
+    id: citizenId,
+    displayName: cleanName,
+    region: cleanRegion,
+    deviceFingerprint: cleanDevice,
+    kycVerified: true,
+    reputationScore: 92,
+    balanceNvc: 1.0,
+    minedTotalNvc: 1.0,
+    miningSessions: 1,
+    lastMinedAt: timestamp,
+  };
+  const citizens = [citizen, ...prev.citizens];
+  return {
+    ok: true,
+    citizen,
+    snapshot: {
+      ...prev,
+      citizens,
+      metrics: { ...prev.metrics, verifiedCitizens: citizens.length },
+      auditLog: [
+        {
+          id: `aud-cit-${Date.now()}`,
+          module: 'Citizens',
+          action: 'KYC_CITIZEN_VERIFIED',
+          verdict: 'accepted' as const,
+          detail: `Verified 1-KYC Citizen ${citizen.id} (${citizen.displayName}) bound to ${citizen.deviceFingerprint}.`,
+          hash: makeLocalHash(`cit-${citizen.id}-${timestamp}`),
+          timestamp,
+        },
+        ...prev.auditLog,
+      ].slice(0, 100),
+    },
+  };
+}
+
+export function applyLocalProposalFallback(
+  prev: EcosystemSnapshot,
+  params: { title: string; description: string; proposer: string },
+): { ok: boolean; proposal?: EcosystemSnapshot['proposals'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const scan = preScreenCompliance(`${params.title} ${params.description}`);
+  if (!scan.passed) {
+    return { ok: false, snapshot: prev, error: scan.message };
+  }
+  const timestamp = new Date().toISOString();
+  const proposal = {
+    id: `prop-nvc-${Date.now().toString(36)}`,
+    title: params.title.trim(),
+    description: params.description.trim(),
+    proposer: params.proposer,
+    category: 'Real Economy' as const,
+    status: 'open' as const,
+    yesVotes: 1,
+    noVotes: 0,
+    voters: [params.proposer],
+    aiForecast: '91% projected APPROVE (aligned with $3.14 peg & zero-interest rules)',
+    createdAt: timestamp,
+  };
+  const proposals = [proposal, ...prev.proposals];
+  return {
+    ok: true,
+    proposal,
+    snapshot: {
+      ...prev,
+      proposals,
+      metrics: {
+        ...prev.metrics,
+        openProposals: proposals.filter((p) => p.status === 'open').length,
+      },
+      auditLog: [
+        {
+          id: `aud-prop-${Date.now()}`,
+          module: 'Governance',
+          action: 'PROPOSAL_CREATED',
+          verdict: 'accepted' as const,
+          detail: `Citizen ${params.proposer} opened ballot "${proposal.title}".`,
+          hash: makeLocalHash(`prop-${proposal.id}-${timestamp}`),
+          timestamp,
+        },
+        ...prev.auditLog,
+      ].slice(0, 100),
+    },
+  };
+}
+
+export function applyLocalVoteFallback(
+  prev: EcosystemSnapshot,
+  params: { proposalId: string; citizenId: string; vote: 'yes' | 'no' },
+): { ok: boolean; proposal?: EcosystemSnapshot['proposals'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const target = prev.proposals.find((p) => p.id === params.proposalId);
+  if (!target) return { ok: false, snapshot: prev, error: 'Proposal not found.' };
+  if (target.voters.includes(params.citizenId)) {
+    return { ok: false, snapshot: prev, error: `1 Person = 1 Vote: ${params.citizenId} already voted on this ballot.` };
+  }
+  const yesVotes = target.yesVotes + (params.vote === 'yes' ? 1 : 0);
+  const noVotes = target.noVotes + (params.vote === 'no' ? 1 : 0);
+  const status: 'open' | 'passed' | 'rejected' =
+    yesVotes >= 3 ? 'passed' : noVotes >= 3 ? 'rejected' : 'open';
+  const updatedProposal = {
+    ...target,
+    yesVotes,
+    noVotes,
+    status,
+    voters: [...target.voters, params.citizenId],
+  };
+  const proposals = prev.proposals.map((p) => (p.id === params.proposalId ? updatedProposal : p));
+  return {
+    ok: true,
+    proposal: updatedProposal,
+    snapshot: {
+      ...prev,
+      proposals,
+      metrics: {
+        ...prev.metrics,
+        openProposals: proposals.filter((p) => p.status === 'open').length,
+      },
+    },
+  };
+}
+
+export function applyLocalMarketplaceListingFallback(
+  prev: EcosystemSnapshot,
+  params: {
+    title: string;
+    description: string;
+    category: EcosystemSnapshot['marketplaceListings'][number]['category'];
+    settlementModel: EcosystemSnapshot['marketplaceListings'][number]['settlementModel'];
+    priceNvc: number;
+    merchantId: string;
+    merchantName: string;
+  },
+): { ok: boolean; listing?: EcosystemSnapshot['marketplaceListings'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const scan = preScreenCompliance(`${params.title} ${params.description}`);
+  if (!scan.passed) {
+    return {
+      ok: false,
+      error: scan.message,
+      snapshot: {
+        ...prev,
+        threatsBlocked: prev.threatsBlocked + 1,
+        ribaBlockedTransactions:
+          scan.category === 'Riba' ? prev.ribaBlockedTransactions + 1 : prev.ribaBlockedTransactions,
+      },
+    };
+  }
+  const listing: EcosystemSnapshot['marketplaceListings'][number] = {
+    id: `mkt-${Date.now().toString(36)}`,
+    title: params.title.trim(),
+    merchantId: params.merchantId,
+    merchantName: params.merchantName,
+    category: params.category,
+    priceNvc: params.priceNvc,
+    description: params.description.trim(),
+    settlementModel: params.settlementModel,
+    stock: 20,
+    soldCount: 0,
+    halalVerified: true,
+    createdAt: new Date().toISOString(),
+  };
+  return {
+    ok: true,
+    listing,
+    snapshot: {
+      ...prev,
+      marketplaceListings: [listing, ...prev.marketplaceListings],
+    },
+  };
+}
+
+export function applyLocalMarketplaceBuyFallback(
+  prev: EcosystemSnapshot,
+  params: { listingId: string; buyerId: string },
+): { ok: boolean; order?: EcosystemSnapshot['marketplaceOrders'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const listing = prev.marketplaceListings.find((l) => l.id === params.listingId);
+  const buyer = prev.citizens.find((c) => c.id === params.buyerId);
+  if (!listing || listing.stock < 1) {
+    return { ok: false, snapshot: prev, error: 'Listing unavailable or out of stock.' };
+  }
+  if (!buyer || buyer.balanceNvc < listing.priceNvc) {
+    return {
+      ok: false,
+      snapshot: prev,
+      error: `Insufficient balance (${buyer?.balanceNvc.toFixed(2) ?? '0'} NVC) for ${listing.priceNvc} NVC item.`,
+    };
+  }
+  const timestamp = new Date().toISOString();
+  const txId = `tx-mkt-${Date.now().toString(36)}`;
+  const order: EcosystemSnapshot['marketplaceOrders'][number] = {
+    id: `ord-${Date.now().toString(36)}`,
+    listingId: listing.id,
+    listingTitle: listing.title,
+    buyerId: buyer.id,
+    merchantId: listing.merchantId,
+    amountNvc: listing.priceNvc,
+    micronNova: Math.round(listing.priceNvc * NovaPolicy.micronNovaPerNvc),
+    usdEquivalent: nvcToUsd(listing.priceNvc),
+    txId,
+    hash: makeLocalHash(`ord-${txId}-${timestamp}`),
+    timestamp,
+  };
+  const tx: NovaTransaction = {
+    id: txId,
+    sender: buyer.id,
+    recipient: listing.merchantId,
+    amount: listing.priceNvc,
+    micronNova: order.micronNova,
+    source: 'marketplace',
+    memo: `Real-economy purchase: ${listing.title}`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    status: 'accepted',
+    reason: 'Settled via Halal Real-Economy Marketplace at $3.14 fixed peg.',
+    riskScore: 3,
+    purityScore: 1,
+    hash: order.hash,
+    timestamp,
+  };
+  const transactions = [tx, ...prev.transactions];
+  return {
+    ok: true,
+    order,
+    snapshot: {
+      ...prev,
+      citizens: prev.citizens.map((c) =>
+        c.id === buyer.id
+          ? { ...c, balanceNvc: Number((c.balanceNvc - listing.priceNvc).toFixed(6)) }
+          : c.id === listing.merchantId
+            ? { ...c, balanceNvc: Number((c.balanceNvc + listing.priceNvc).toFixed(6)) }
+            : c,
+      ),
+      marketplaceListings: prev.marketplaceListings.map((l) =>
+        l.id === listing.id ? { ...l, stock: l.stock - 1, soldCount: l.soldCount + 1 } : l,
+      ),
+      marketplaceOrders: [order, ...prev.marketplaceOrders],
+      transactions,
+      metrics: {
+        ...prev.metrics,
+        totalTransactions: transactions.length,
+        acceptedTransactions: transactions.filter((t) => t.status === 'accepted').length,
+        marketplaceVolumeNvc: Number((prev.metrics.marketplaceVolumeNvc + listing.priceNvc).toFixed(4)),
+      },
+    },
+  };
+}
+
+export function applyLocalMudarabahFallback(
+  prev: EcosystemSnapshot,
+  params: { netProfitNvc: number; partnerSharePercent: number; note: string },
+): { ok: boolean; distributableNvc?: number; recipientCount?: number; snapshot: EcosystemSnapshot; error?: string } {
+  const scan = preScreenCompliance(params.note);
+  if (!scan.passed) {
+    return {
+      ok: false,
+      error: scan.message,
+      snapshot: {
+        ...prev,
+        threatsBlocked: prev.threatsBlocked + 1,
+        ribaBlockedTransactions:
+          scan.category === 'Riba' ? prev.ribaBlockedTransactions + 1 : prev.ribaBlockedTransactions,
+      },
+    };
+  }
+  const distributable = Number(((params.netProfitNvc * params.partnerSharePercent) / 100).toFixed(6));
+  const perCitizen = Number((distributable / Math.max(1, prev.citizens.length)).toFixed(6));
+  return {
+    ok: true,
+    distributableNvc: distributable,
+    recipientCount: prev.citizens.length,
+    snapshot: {
+      ...prev,
+      citizens: prev.citizens.map((c) => ({
+        ...c,
+        balanceNvc: Number((c.balanceNvc + perCitizen).toFixed(6)),
+      })),
+      metrics: {
+        ...prev.metrics,
+        mudarabahDistributedNvc: Number((prev.metrics.mudarabahDistributedNvc + distributable).toFixed(4)),
+      },
+    },
+  };
+}
+
+export function applyLocalSealBlockFallback(
+  prev: EcosystemSnapshot,
+): { block: EcosystemSnapshot['scpBlocks'][number]; snapshot: EcosystemSnapshot } {
+  const latest = prev.scpBlocks[0];
+  const nextHeight = (latest?.height ?? 1042) + 1;
+  const accepted = prev.transactions.filter((t) => t.status === 'accepted').slice(0, 6);
+  const totalNvc = Number(accepted.reduce((acc, t) => acc + t.amount, 0).toFixed(6));
+  const timestamp = new Date().toISOString();
+  const block: EcosystemSnapshot['scpBlocks'][number] = {
+    height: nextHeight,
+    hash: makeLocalHash(`scp-block-${nextHeight}-${timestamp}`),
+    previousHash: latest?.hash || makeLocalHash('scp-genesis'),
+    txIds: accepted.map((t) => t.id),
+    txCount: accepted.length,
+    totalNvc,
+    totalMicronNova: Math.round(totalNvc * NovaPolicy.micronNovaPerNvc),
+    quorum: `${prev.metrics.verifiedOracleNodes}/${prev.oracleNodes.length} SCP Validators`,
+    energyWh: 0.04,
+    sealedAt: timestamp,
+  };
+  return {
+    block,
+    snapshot: {
+      ...prev,
+      scpBlocks: [block, ...prev.scpBlocks].slice(0, 25),
+      metrics: {
+        ...prev.metrics,
+        latestBlockHeight: nextHeight,
+      },
+    },
+  };
+}
+
+export interface ProvenanceInspection {
+  queryId: string;
+  entityType: 'transaction' | 'citizen' | 'coin';
+  status: 'valid' | 'rejected';
+  purityScore: number;
+  riskScore: number;
+  reason: string;
+  holdingNvc: number;
+  capPercent: number;
+  blockHeight?: number;
+  sha256: string;
+  transaction?: NovaTransaction;
+}
+
+export function buildLocalProvenanceReport(
+  snapshot: EcosystemSnapshot,
+  rawQuery: string,
+): ProvenanceInspection {
+  const query = rawQuery.trim() || 'NVC-MINER-RASPI-09';
+  const matchedTx = snapshot.transactions.find(
+    (t) => t.id.toLowerCase() === query.toLowerCase(),
+  );
+  if (matchedTx) {
+    return {
+      queryId: matchedTx.id,
+      entityType: 'transaction',
+      status: matchedTx.status === 'accepted' ? 'valid' : 'rejected',
+      purityScore: matchedTx.purityScore,
+      riskScore: matchedTx.riskScore ?? (matchedTx.status === 'accepted' ? 4 : 92),
+      reason: matchedTx.reason,
+      holdingNvc: matchedTx.amount,
+      capPercent: (matchedTx.amount / NovaPolicy.maxWalletHoldingNvc) * 100,
+      blockHeight: snapshot.scpBlocks.find((b) => b.txIds.includes(matchedTx.id))?.height ?? snapshot.metrics.latestBlockHeight,
+      sha256: matchedTx.hash,
+      transaction: matchedTx,
+    };
+  }
+  const matchedCitizen = snapshot.citizens.find(
+    (c) => c.id.toLowerCase() === query.toLowerCase(),
+  );
+  if (matchedCitizen) {
+    return {
+      queryId: matchedCitizen.id,
+      entityType: 'citizen',
+      status: 'valid',
+      purityScore: 1,
+      riskScore: 3,
+      reason: `Verified 1-KYC Citizen (${matchedCitizen.displayName}) bound to ${matchedCitizen.deviceFingerprint} at fixed $3.14 Nova Peg.`,
+      holdingNvc: matchedCitizen.balanceNvc,
+      capPercent: (matchedCitizen.balanceNvc / NovaPolicy.maxWalletHoldingNvc) * 100,
+      blockHeight: snapshot.metrics.latestBlockHeight,
+      sha256: makeLocalHash(matchedCitizen.id),
+    };
+  }
+  const isTainted = NovaPolicy.blacklistedSources.some((src) => query.toLowerCase().includes(src));
+  return {
+    queryId: query,
+    entityType: 'coin',
+    status: isTainted ? 'rejected' : 'valid',
+    purityScore: isTainted ? 0 : 1,
+    riskScore: isTainted ? 94 : 5,
+    reason: isTainted
+      ? 'Nova Core Coin rejected: Exchange/third-party exposure detected by NovaPurityEnforcer.'
+      : 'Pure NVC mathematical identity verified: 1 NVC = $3.14 USD · 0% Interest · Riba-Free.',
+    holdingNvc: isTainted ? 0 : 1,
+    capPercent: 0,
+    blockHeight: snapshot.metrics.latestBlockHeight,
+    sha256: makeLocalHash(query),
+  };
+}
+

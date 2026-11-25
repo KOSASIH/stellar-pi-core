@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Brain, Cpu, Globe2, Lock, Scale, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, Brain, Cpu, Globe2, Scale, ShieldCheck, Users } from 'lucide-react';
 import {
   formatMicronNova,
   formatUsd,

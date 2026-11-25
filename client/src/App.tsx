@@ -3,32 +3,20 @@ import {
   Activity,
   AlertTriangle,
   AppWindow,
-  Bot,
   Brain,
   CheckCircle2,
   Cpu,
-  Download,
   Eye,
   Globe2,
   LayoutDashboard,
-  Lock,
   Menu,
-  Network,
-  Power,
-  Rocket,
-  RotateCcw,
   Scale,
   Search,
-  Shield,
   ShieldAlert,
   ShieldCheck,
-  Smartphone,
   Store,
   Users,
-  Vote,
   X,
-  XCircle,
-  Zap,
 } from 'lucide-react';
 import {
   formatMicronNova,
@@ -36,16 +24,31 @@ import {
   isValidNovaValue,
   nvcToUsd,
   type EcosystemSnapshot,
+  type MarketplaceListing,
   type NovaAppRecord,
   type NovaTransaction,
 } from '../../shared/novaPolicy.ts';
+import { AppsPanel } from './components/AppsPanel.tsx';
+import { AuditPanel } from './components/AuditPanel.tsx';
+import { CitizensReservesPanel } from './components/CitizensReservesPanel.tsx';
+import { HyperMindPanel } from './components/HyperMindPanel.tsx';
+import { MarketplacePanel } from './components/MarketplacePanel.tsx';
+import { OracleScpPanel } from './components/OracleScpPanel.tsx';
 import { OverviewPanel, type WorkspaceTabId } from './components/OverviewPanel.tsx';
+import { ProvenanceModal } from './components/ProvenanceModal.tsx';
+import { TransactionsPanel } from './components/TransactionsPanel.tsx';
 import {
   applyLocalAppFallback,
+  applyLocalCitizenRegisterFallback,
+  applyLocalMarketplaceBuyFallback,
+  applyLocalMarketplaceListingFallback,
+  applyLocalMudarabahFallback,
+  applyLocalProposalFallback,
+  applyLocalSealBlockFallback,
   applyLocalTransactionFallback,
+  applyLocalVoteFallback,
   createLocalFallbackSnapshot,
   makeLocalHash,
-  preScreenCompliance,
   safeFetchJson,
   type HyperAlertColor,
   type HyperAlertItem,
@@ -54,12 +57,7 @@ import {
 
 function SupernovaIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="w-5 h-5 text-amber-400"
-    >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5 text-amber-400">
       <path
         d="M12 2L14.4 8.6L21 6.5L16.3 12L21 17.5L14.4 15.4L12 22L9.6 15.4L3 17.5L7.7 12L3 6.5L9.6 8.6L12 2Z"
         fill="currentColor"
@@ -68,25 +66,6 @@ function SupernovaIcon() {
       <circle cx="12" cy="12" r="2.6" className="fill-amber-200" />
     </svg>
   );
-}
-
-function getHyperModuleIcon(id: string) {
-  switch (id) {
-    case 'oracle-shield':
-      return Eye;
-    case 'whale-sybil-guard':
-      return Shield;
-    case 'scam-hyperscanner':
-      return Bot;
-    case 'hyper-compliance':
-      return ShieldCheck;
-    case 'self-healing-network':
-      return Network;
-    case 'predictive-governance':
-      return Brain;
-    default:
-      return Lock;
-  }
 }
 
 const NAV_ITEMS: ReadonlyArray<{
@@ -109,6 +88,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [provenanceQuery, setProvenanceQuery] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [hyperAlerts, setHyperAlerts] = useState<HyperAlertItem[]>([]);
 
@@ -132,11 +112,6 @@ export default function App() {
   const [proposalText, setProposalText] = useState('Allow external exchange price drift to $3.20');
   const [votePrediction, setVotePrediction] = useState<string | null>(null);
 
-  // Ledger & Audit search/filter state
-  const [txFilter, setTxFilter] = useState<'all' | 'accepted' | 'rejected'>('all');
-  const [txSearch, setTxSearch] = useState('');
-  const [auditSearch, setAuditSearch] = useState('');
-
   // Citizens, Mobile Mining & Community Voting state
   const [newCitizenName, setNewCitizenName] = useState('');
   const [newCitizenRegion, setNewCitizenRegion] = useState('Asia-Pacific (ID)');
@@ -153,10 +128,11 @@ export default function App() {
     timestamp: string;
   } | null>(null);
 
-  // Real-Economy Marketplace & Mudarabah Profit-Sharing state
+  // Real-Economy Marketplace & Halal Mudarabah Profit-Sharing state
   const [mktTitle, setMktTitle] = useState('');
-  const [mktCategory, setMktCategory] = useState<'Physical Goods' | 'Clean Energy' | 'Logistics' | 'Halal Mudarabah'>('Physical Goods');
-  const [mktSettlementModel, setMktSettlementModel] = useState<'Direct Real Trade' | 'Fee-Based Service' | 'Mudarabah Profit-Share (0% Interest)'>('Direct Real Trade');
+  const [mktCategory, setMktCategory] = useState<MarketplaceListing['category']>('Physical Goods');
+  const [mktSettlementModel, setMktSettlementModel] =
+    useState<MarketplaceListing['settlementModel']>('Direct Real Trade');
   const [mktPriceNvc, setMktPriceNvc] = useState('12.5');
   const [mktDesc, setMktDesc] = useState('');
   const [mudarabahProfitNvc, setMudarabahProfitNvc] = useState('20');
@@ -629,20 +605,39 @@ export default function App() {
         deviceFingerprint: newCitizenDevice,
       }),
     });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.citizen) {
-      setSelectedCitizenId(result.data.citizen.id);
-      setNewCitizenName('');
-      setNewCitizenDevice(`DEV-MOBILE-${Math.floor(100 + Math.random() * 899)}`);
-      setFeedback({
-        kind: 'success',
-        text: `1-KYC Citizen ${result.data.citizen.id} (${result.data.citizen.displayName}) verified on SCP.`,
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.citizen) {
+        setSelectedCitizenId(result.data.citizen.id);
+        setNewCitizenName('');
+        setNewCitizenDevice(`DEV-MOBILE-${Math.floor(100 + Math.random() * 899)}`);
+        setFeedback({
+          kind: 'success',
+          text: `1-KYC Citizen ${result.data.citizen.id} (${result.data.citizen.displayName}) verified on SCP.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Citizen registration blocked.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalCitizenRegisterFallback(snapshot, {
+        displayName: newCitizenName,
+        region: newCitizenRegion,
+        deviceFingerprint: newCitizenDevice,
       });
-    } else {
-      setFeedback({
-        kind: 'error',
-        text: result.data?.error || result.error || 'Citizen registration blocked.',
-      });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.citizen) {
+        setSelectedCitizenId(local.citizen.id);
+        setNewCitizenName('');
+        setNewCitizenDevice(`DEV-MOBILE-${Math.floor(100 + Math.random() * 899)}`);
+        setFeedback({
+          kind: 'success',
+          text: `1-KYC Citizen ${local.citizen.id} (${local.citizen.displayName}) verified locally on SCP.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Citizen registration blocked.' });
+      }
     }
   }
 
@@ -725,19 +720,37 @@ export default function App() {
         proposer: selectedCitizenId,
       }),
     });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.proposal) {
-      setNewProposalTitle('');
-      setNewProposalDesc('');
-      setFeedback({
-        kind: 'success',
-        text: `Proposal "${result.data.proposal.title}" opened for 1-Person = 1-Vote Citizen ballot.`,
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.proposal) {
+        setNewProposalTitle('');
+        setNewProposalDesc('');
+        setFeedback({
+          kind: 'success',
+          text: `Proposal "${result.data.proposal.title}" opened for 1-Person = 1-Vote Citizen ballot.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Proposal rejected.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalProposalFallback(snapshot, {
+        title: newProposalTitle,
+        description: newProposalDesc,
+        proposer: selectedCitizenId,
       });
-    } else {
-      setFeedback({
-        kind: 'error',
-        text: result.data?.error || result.error || 'Proposal rejected by compliance filter.',
-      });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.proposal) {
+        setNewProposalTitle('');
+        setNewProposalDesc('');
+        setFeedback({
+          kind: 'success',
+          text: `Proposal "${local.proposal.title}" opened locally for 1-Person = 1-Vote Citizen ballot.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Proposal rejected by compliance filter.' });
+      }
     }
   }
 
@@ -750,19 +763,35 @@ export default function App() {
     }>(`/api/governance/proposals/${proposalId}/vote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify({ citizenId: selectedCitizenId, vote }),
+    });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.proposal) {
+        setFeedback({
+          kind: 'success',
+          text: `${selectedCitizenId} cast 1-KYC vote (${vote.toUpperCase()}) on "${result.data.proposal.title}" · Status: ${result.data.proposal.status}.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Vote rejected.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalVoteFallback(snapshot, {
+        proposalId,
         citizenId: selectedCitizenId,
         vote,
-      }),
-    });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.proposal) {
-      setFeedback({
-        kind: 'success',
-        text: `${selectedCitizenId} cast 1-KYC vote (${vote.toUpperCase()}) on "${result.data.proposal.title}" · Status: ${result.data.proposal.status}.`,
       });
-    } else {
-      setFeedback({ kind: 'error', text: result.data?.error || result.error || 'Vote rejected.' });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.proposal) {
+        setFeedback({
+          kind: 'success',
+          text: `${selectedCitizenId} cast 1-KYC vote (${vote.toUpperCase()}) on "${local.proposal.title}" · Status: ${local.proposal.status}.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Vote rejected.' });
+      }
     }
   }
 
@@ -770,6 +799,15 @@ export default function App() {
     e.preventDefault();
     setFeedback(null);
     const activeCitizen = snapshot?.citizens.find((c) => c.id === selectedCitizenId);
+    const payload = {
+      title: mktTitle,
+      description: mktDesc,
+      category: mktCategory,
+      settlementModel: mktSettlementModel,
+      priceNvc: Number(mktPriceNvc),
+      merchantId: selectedCitizenId,
+      merchantName: activeCitizen?.displayName || 'Verified NVC Citizen',
+    };
     const result = await safeFetchJson<{
       listing?: { title: string; priceNvc: number };
       snapshot?: EcosystemSnapshot;
@@ -777,29 +815,35 @@ export default function App() {
     }>('/api/marketplace/listings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: mktTitle,
-        description: mktDesc,
-        category: mktCategory,
-        settlementModel: mktSettlementModel,
-        priceNvc: Number(mktPriceNvc),
-        merchantId: selectedCitizenId,
-        merchantName: activeCitizen?.displayName || 'Verified NVC Citizen',
-      }),
+      body: JSON.stringify(payload),
     });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.listing) {
-      setMktTitle('');
-      setMktDesc('');
-      setFeedback({
-        kind: 'success',
-        text: `Listed "${result.data.listing.title}" (${result.data.listing.priceNvc} NVC = ${formatUsd(nvcToUsd(result.data.listing.priceNvc))}) after HyperScanner & RibaGuard clearance.`,
-      });
-    } else {
-      setFeedback({
-        kind: 'error',
-        text: result.data?.error || result.error || 'Listing rejected by compliance filter.',
-      });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.listing) {
+        setMktTitle('');
+        setMktDesc('');
+        setFeedback({
+          kind: 'success',
+          text: `Listed "${result.data.listing.title}" (${result.data.listing.priceNvc} NVC = ${formatUsd(nvcToUsd(result.data.listing.priceNvc))}) after HyperScanner & RibaGuard clearance.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Listing rejected by compliance filter.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalMarketplaceListingFallback(snapshot, payload);
+      setSnapshot(local.snapshot);
+      if (local.ok && local.listing) {
+        setMktTitle('');
+        setMktDesc('');
+        setFeedback({
+          kind: 'success',
+          text: `Listed "${local.listing.title}" (${local.listing.priceNvc} NVC = ${formatUsd(nvcToUsd(local.listing.priceNvc))}) after local RibaGuard clearance.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Listing rejected by compliance filter.' });
+      }
     }
   }
 
@@ -812,20 +856,34 @@ export default function App() {
     }>('/api/marketplace/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify({ listingId, buyerId: selectedCitizenId, quantity: 1 }),
+    });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.order) {
+        setFeedback({
+          kind: 'success',
+          text: `Settled ${result.data.order.amountNvc} NVC (${formatMicronNova(result.data.order.amountNvc)} · ${formatUsd(result.data.order.usdEquivalent)}) for "${result.data.order.listingTitle}".`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Order could not be settled.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalMarketplaceBuyFallback(snapshot, {
         listingId,
         buyerId: selectedCitizenId,
-        quantity: 1,
-      }),
-    });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.order) {
-      setFeedback({
-        kind: 'success',
-        text: `Settled ${result.data.order.amountNvc} NVC (${formatMicronNova(result.data.order.amountNvc)} · ${formatUsd(result.data.order.usdEquivalent)}) for "${result.data.order.listingTitle}".`,
       });
-    } else {
-      setFeedback({ kind: 'error', text: result.data?.error || result.error || 'Order could not be settled.' });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.order) {
+        setFeedback({
+          kind: 'success',
+          text: `Settled ${local.order.amountNvc} NVC (${formatMicronNova(local.order.amountNvc)} · ${formatUsd(local.order.usdEquivalent)}) for "${local.order.listingTitle}".`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Order could not be settled.' });
+      }
     }
   }
 
@@ -867,20 +925,32 @@ export default function App() {
       snapshot?: EcosystemSnapshot;
       error?: string;
     }>('/api/scp/seal', { method: 'POST' });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.block) {
+    if (result.data?.snapshot && result.data.block) {
+      setSnapshot(result.data.snapshot);
       setFeedback({
         kind: 'success',
         text: `Sealed SCP Block #${result.data.block.height} (${result.data.block.txCount} tx · ${result.data.block.totalNvc} NVC · ${result.data.block.quorum} · ${result.data.block.energyWh} Wh).`,
       });
-    } else {
-      setFeedback({ kind: 'error', text: result.data?.error || result.error || 'Failed to seal SCP ledger block.' });
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalSealBlockFallback(snapshot);
+      setSnapshot(local.snapshot);
+      setFeedback({
+        kind: 'success',
+        text: `Sealed SCP Block #${local.block.height} (${local.block.txCount} tx · ${local.block.totalNvc} NVC · ${local.block.quorum} · ${local.block.energyWh} Wh).`,
+      });
     }
   }
 
   async function handleDistributeMudarabah(e: FormEvent) {
     e.preventDefault();
     setFeedback(null);
+    const payload = {
+      netProfitNvc: Number(mudarabahProfitNvc),
+      partnerSharePercent: Number(mudarabahRatio),
+      note: mudarabahNote,
+    };
     const result = await safeFetchJson<{
       distributableNvc?: number;
       recipientCount?: number;
@@ -889,29 +959,45 @@ export default function App() {
     }>('/api/marketplace/mudarabah/distribute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        netProfitNvc: Number(mudarabahProfitNvc),
-        partnerSharePercent: Number(mudarabahRatio),
-        note: mudarabahNote,
-      }),
+      body: JSON.stringify(payload),
     });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data) {
-      setFeedback({
-        kind: 'success',
-        text: `Mudarabah 0% Interest Cycle Settled: Distributed ${result.data.distributableNvc} NVC (${formatMicronNova(result.data.distributableNvc || 0)}) across ${result.data.recipientCount} Citizen partners.`,
-      });
-    } else {
-      setFeedback({
-        kind: 'error',
-        text: result.data?.error || result.error || 'Mudarabah distribution rejected.',
-      });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok) {
+        setFeedback({
+          kind: 'success',
+          text: `Mudarabah 0% Interest Cycle Settled: Distributed ${result.data.distributableNvc} NVC (${formatMicronNova(result.data.distributableNvc || 0)}) across ${result.data.recipientCount} Citizen partners.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Mudarabah distribution rejected.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalMudarabahFallback(snapshot, payload);
+      setSnapshot(local.snapshot);
+      if (local.ok) {
+        setFeedback({
+          kind: 'success',
+          text: `Mudarabah 0% Interest Cycle Settled: Distributed ${local.distributableNvc} NVC (${formatMicronNova(local.distributableNvc || 0)}) across ${local.recipientCount} Citizen partners.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Mudarabah distribution rejected.' });
+      }
     }
   }
 
   async function handleCitizenP2P(e: FormEvent) {
     e.preventDefault();
     setFeedback(null);
+    const payload = {
+      sender: p2pFromCitizen,
+      recipient: p2pToCitizen,
+      amount: Number(p2pAmount),
+      source: 'p2p',
+      memo: '1-KYC Citizen P2P Settlement',
+      reportedValueUsd: 3.14,
+    };
     const result = await safeFetchJson<{
       transaction?: { amount: number; reason?: string };
       snapshot?: EcosystemSnapshot;
@@ -919,25 +1005,32 @@ export default function App() {
     }>('/api/nova/transaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender: p2pFromCitizen,
-        recipient: p2pToCitizen,
-        amount: Number(p2pAmount),
-        source: 'p2p',
-        memo: '1-KYC Citizen P2P Settlement',
-        reportedValueUsd: 3.14,
-      }),
+      body: JSON.stringify(payload),
     });
-    if (result.data?.snapshot) setSnapshot(result.data.snapshot);
-    if (result.ok && result.data?.transaction) {
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.transaction) {
+        setFeedback({
+          kind: 'success',
+          text: `Settled ${result.data.transaction.amount} NVC (${formatMicronNova(result.data.transaction.amount)}) from ${p2pFromCitizen} to ${p2pToCitizen}.`,
+        });
+      } else {
+        setFeedback({
+          kind: 'error',
+          text: result.data.transaction?.reason || result.data.error || 'Citizen P2P transfer rejected.',
+        });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalTransactionFallback(snapshot, payload);
+      setSnapshot(local.snapshot);
       setFeedback({
-        kind: 'success',
-        text: `Settled ${result.data.transaction.amount} NVC (${formatMicronNova(result.data.transaction.amount)}) from ${p2pFromCitizen} to ${p2pToCitizen}.`,
-      });
-    } else {
-      setFeedback({
-        kind: 'error',
-        text: result.data?.transaction?.reason || result.data?.error || result.error || 'Citizen P2P transfer rejected.',
+        kind: local.tx.status === 'accepted' ? 'success' : 'error',
+        text:
+          local.tx.status === 'accepted'
+            ? `Settled ${local.tx.amount} NVC (${formatMicronNova(local.tx.amount)}) from ${p2pFromCitizen} to ${p2pToCitizen}.`
+            : local.tx.reason,
       });
     }
   }
@@ -975,8 +1068,6 @@ export default function App() {
   const totalPolicyBlocked =
     snapshot.ribaBlockedTransactions + snapshot.gamblingBlocked + snapshot.exchangeBlocked;
   const activeNavMeta = NAV_ITEMS.find((item) => item.id === activeTab) || NAV_ITEMS[0];
-  const txPreScan = preScreenCompliance(`${sender} ${recipient} ${memo}`);
-  const appPreScan = preScreenCompliance(`${appName} ${appCategory} ${appDescription}`);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">
@@ -1032,10 +1123,7 @@ export default function App() {
       {/* Mobile Slide-Over Navigation Drawer */}
       {mobileNavOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div
-            className="fixed inset-0 bg-slate-950/80"
-            onClick={() => setMobileNavOpen(false)}
-          />
+          <div className="fixed inset-0 bg-slate-950/80" onClick={() => setMobileNavOpen(false)} />
           <aside className="relative z-10 w-64 max-w-[80vw] bg-slate-900 border-r border-slate-800 flex flex-col">
             <div className="px-4 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1061,9 +1149,7 @@ export default function App() {
                     type="button"
                     onClick={() => selectTab(item.id)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap cursor-pointer ${
-                      active
-                        ? 'bg-amber-500 text-slate-950 font-semibold'
-                        : 'text-slate-300 hover:bg-slate-800'
+                      active ? 'bg-amber-500 text-slate-950 font-semibold' : 'text-slate-300 hover:bg-slate-800'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
@@ -1107,6 +1193,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setProvenanceQuery(snapshot.transactions[0]?.id || 'NVC-MINER-RASPI-09')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Verify Provenance</span>
+            </button>
             <button
               type="button"
               onClick={() => selectTab('hyper')}
@@ -1210,9 +1304,7 @@ export default function App() {
                   / {metrics.rejectedTransactions} Blocked
                 </span>
               </div>
-              <p className="mt-1 text-xs text-slate-400">
-                Allowed: mining, rewards, p2p, marketplace
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Allowed: mining, rewards, p2p, marketplace</p>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -1223,9 +1315,7 @@ export default function App() {
               <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
                 {metrics.activeApps}
               </div>
-              <p className="mt-1 text-xs text-slate-400">
-                HyperScanner: 0 Scams Passed
-              </p>
+              <p className="mt-1 text-xs text-slate-400">HyperScanner: 0 Scams Passed</p>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -1253,1583 +1343,153 @@ export default function App() {
                   <span>{totalPolicyBlocked} blocked</span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-slate-400">
-                Stabilizer: {snapshot.stabilizerStatus}
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Stabilizer: {snapshot.stabilizerStatus}</p>
             </div>
           </section>
 
-          {/* VIEW: Network Overview */}
-          {activeTab === 'overview' && (
-            <OverviewPanel snapshot={snapshot} onNavigate={selectTab} />
-          )}
+          {activeTab === 'overview' && <OverviewPanel snapshot={snapshot} onNavigate={selectTab} />}
 
-          {/* VIEW: Stablecoin & AHI AI Filter */}
           {activeTab === 'transactions' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <form
-                onSubmit={handleTransactionSubmit}
-                className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-white">
-                    Submit NVC Stablecoin Transaction
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Screened in real time by NovaHyperMind, AHI AI, NovaValuePolicy, NovaPurityEnforcer, and RibaGuard AI.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Sender</span>
-                    <input
-                      type="text"
-                      value={sender}
-                      onChange={(e) => setSender(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                      required
-                    />
-                  </label>
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Recipient</span>
-                    <input
-                      type="text"
-                      value={recipient}
-                      onChange={(e) => setRecipient(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                      required
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Amount (NVC)</span>
-                    <input
-                      type="number"
-                      min="0.000001"
-                      step="any"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm tabular-nums text-white"
-                      required
-                    />
-                    {Number.isFinite(Number(amount)) && Number(amount) > 0 && (
-                      <span className="block text-[11px] text-amber-300/90 tabular-nums">
-                        = {formatMicronNova(Number(amount))}
-                      </span>
-                    )}
-                  </label>
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Coin Origin Source</span>
-                    <select
-                      value={source}
-                      onChange={(e) => setSource(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    >
-                      <option value="mining">mining (allowed)</option>
-                      <option value="contribution_rewards">contribution_rewards (allowed)</option>
-                      <option value="p2p">p2p (allowed)</option>
-                      <option value="marketplace">marketplace (allowed)</option>
-                      <option value="app">app (allowed)</option>
-                      <option value="exchange">exchange (blacklisted)</option>
-                      <option value="bought">bought (blacklisted)</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Reported Valuation (USD)</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={reportedValueUsd}
-                    onChange={(e) => setReportedValueUsd(e.target.value)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm tabular-nums text-white"
-                    required
-                  />
-                </label>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Transaction Memo</span>
-                  <input
-                    type="text"
-                    value={memo}
-                    onChange={(e) => setMemo(e.target.value)}
-                    placeholder="Describe purpose (gambling & riba keywords are auto-rejected)"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                  />
-                </label>
-
-                {/* Live Pre-Submit RibaGuard & Purity Screening */}
-                <div
-                  className={`rounded-lg border px-3 py-2 text-xs flex items-center gap-2 ${
-                    txPreScan.passed
-                      ? 'border-emerald-800/40 bg-emerald-950/20 text-emerald-300'
-                      : 'border-rose-800/50 bg-rose-950/30 text-rose-200'
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4 shrink-0" />
-                  <span>{txPreScan.message}</span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submittingTx}
-                  className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50 cursor-pointer"
-                >
-                  {submittingTx ? 'Verifying...' : 'Validate & Submit NVC Transfer'}
-                </button>
-
-                <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSource('exchange');
-                      setMemo('External exchange liquidity deposit');
-                    }}
-                    className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                  >
-                    Test Exchange Rejection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSource('p2p');
-                      setMemo('Online casino jackpot entry');
-                    }}
-                    className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                  >
-                    Test Gambling Filter
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSource('p2p');
-                      setReportedValueUsd('3.14');
-                      setMemo('Lending 100 NVC with 10% interest APY');
-                    }}
-                    className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 cursor-pointer"
-                  >
-                    Test Riba Rejection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSource('mining');
-                      setReportedValueUsd('3.14');
-                      setMemo('Node mining reward settlement');
-                    }}
-                    className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                  >
-                    Reset Valid Preset
-                  </button>
-                </div>
-              </form>
-
-              <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">Ledger & Filter Verdicts</h2>
-                    <p className="text-xs text-slate-400">
-                      {snapshot.transactions.length} recorded · SCP Consensus
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={txSearch}
-                        onChange={(e) => setTxSearch(e.target.value)}
-                        placeholder="Search address or memo..."
-                        className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-44"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-lg">
-                      {(['all', 'accepted', 'rejected'] as const).map((statusOption) => (
-                        <button
-                          key={statusOption}
-                          type="button"
-                          onClick={() => setTxFilter(statusOption)}
-                          className={`px-2.5 py-1 rounded text-xs font-medium capitalize transition-colors cursor-pointer ${
-                            txFilter === statusOption
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {statusOption}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-slate-800/80 max-h-[560px] overflow-y-auto pr-1">
-                  {snapshot.transactions
-                    .filter((tx) => (txFilter === 'all' ? true : tx.status === txFilter))
-                    .filter((tx) => {
-                      const q = txSearch.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        tx.id.toLowerCase().includes(q) ||
-                        tx.sender.toLowerCase().includes(q) ||
-                        tx.recipient.toLowerCase().includes(q) ||
-                        tx.memo.toLowerCase().includes(q) ||
-                        tx.source.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((tx: NovaTransaction) => (
-                      <div key={tx.id} className="py-3.5 first:pt-1 last:pb-1 space-y-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            {tx.status === 'accepted' ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                            )}
-                            <span className="font-mono text-slate-200">{tx.id}</span>
-                            <span className="text-slate-500">·</span>
-                            <span className="text-slate-400">{tx.source}</span>
-                            <span className="text-slate-500">·</span>
-                            <span
-                              className={`font-medium capitalize ${
-                                tx.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'
-                              }`}
-                            >
-                              {tx.status}
-                            </span>
-                          </div>
-                          <div className="text-right tabular-nums">
-                            <span className="font-semibold text-xs sm:text-sm text-white">
-                              {tx.amount} NVC = {formatUsd(tx.amount * tx.reportedValueUsd)} USD ·{' '}
-                              {formatMicronNova(tx.amount)}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-300">
-                          {tx.sender} → {tx.recipient} · {tx.memo}
-                        </p>
-                        <p
-                          className={`text-xs ${
-                            tx.status === 'accepted' ? 'text-emerald-300' : 'text-rose-300'
-                          }`}
-                        >
-                          {tx.reason}
-                        </p>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
+            <TransactionsPanel
+              snapshot={snapshot}
+              sender={sender}
+              recipient={recipient}
+              amount={amount}
+              source={source}
+              memo={memo}
+              reportedValueUsd={reportedValueUsd}
+              submittingTx={submittingTx}
+              onChangeSender={setSender}
+              onChangeRecipient={setRecipient}
+              onChangeAmount={setAmount}
+              onChangeSource={setSource}
+              onChangeMemo={setMemo}
+              onChangeReportedValueUsd={setReportedValueUsd}
+              onSubmitTx={handleTransactionSubmit}
+              onInspectProvenance={(id) => setProvenanceQuery(id)}
+            />
           )}
 
-          {/* VIEW: Hyper-Intelligence Command Center */}
           {activeTab === 'hyper' && (
-            <div className="space-y-6">
-              <div className="rounded-xl border border-amber-500/30 bg-slate-900 p-5 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-amber-400" />
-                    <h2 className="text-base font-semibold text-white">
-                      Hyper-Intelligence Command Center (NovaHyperMind)
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Total Threats Blocked:{' '}
-                    <span className="text-amber-300 font-semibold tabular-nums">
-                      {snapshot.threatsBlocked.toLocaleString()}
-                    </span>{' '}
-                    · Network Health: {snapshot.networkHealth}% - Self-Healing Active · Stabilizer:{' '}
-                    {snapshot.stabilizerStatus} - External Volatility BLOCKED
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 relative z-10">
-                  <button
-                    type="button"
-                    onClick={handleSimulateWhaleAttack}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 border border-rose-400/50 text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    Simulate Whale Attack
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSimulateScamApp}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 border border-orange-400/50 text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-                  >
-                    <Bot className="w-3.5 h-3.5" />
-                    Simulate Scam App
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSimulateOracleManipulation}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 border border-sky-400/50 text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    Simulate Oracle Manipulation
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSelfHealNetwork}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-400/50 text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    Trigger Self-Heal
-                  </button>
-                </div>
-              </div>
-
-              {/* 7 Hyper-Intelligence AI Module Cards */}
-              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {snapshot.hyperModules.map((mod) => {
-                  const Icon = getHyperModuleIcon(mod.id);
-                  return (
-                    <div
-                      key={mod.id}
-                      className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2.5 flex flex-col justify-between"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 text-xs text-emerald-300">
-                          <span className="font-medium">{mod.status}</span>
-                          <span className="tabular-nums font-medium">Health: {mod.health}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Icon className="w-4 h-4 text-amber-400 shrink-0" />
-                          <h3 className="text-sm font-semibold text-white">{mod.name}</h3>
-                        </div>
-                        <p className="text-xs text-slate-400">{mod.description}</p>
-                      </div>
-                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs tabular-nums">
-                        <span className="text-slate-400">Blocked</span>
-                        <strong className="text-white font-mono">
-                          {mod.threatsBlocked.toLocaleString()}
-                        </strong>
-                      </div>
-                    </div>
-                  );
-                })}
-              </section>
-
-              {/* HyperMind Live Log + Predictive Governance AI */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Network className="w-4 h-4 text-amber-400" />
-                      <h3 className="text-base font-semibold text-white">HyperMind Live Log</h3>
-                    </div>
-                    <span className="text-xs text-slate-400 tabular-nums">
-                      {snapshot.hyperMindLog.length} autonomous decisions
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80 max-h-[360px] overflow-y-auto pr-1">
-                    {snapshot.hyperMindLog.map((entry) => (
-                      <div key={entry.id} className="py-3 first:pt-1 last:pb-1 text-xs space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`font-semibold ${
-                              entry.severity === 'blocked'
-                                ? 'text-rose-300'
-                                : entry.severity === 'healed'
-                                  ? 'text-emerald-300'
-                                  : 'text-amber-300'
-                            }`}
-                          >
-                            {entry.module}
-                          </span>
-                          <span className="text-slate-500 tabular-nums">
-                            {new Date(entry.timestamp).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-slate-200">{entry.decision}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">
-                      Predictive Governance AI (1 Person = 1 Vote)
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Whale-proof voting predictor powered by Citizen KYC & Reputation Score.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handlePredictGovernance} className="space-y-3">
-                    <label className="block text-xs text-slate-300 space-y-1">
-                      <span>Proposal to Forecast</span>
-                      <input
-                        type="text"
-                        value={proposalText}
-                        onChange={(e) => setProposalText(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                        required
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2 cursor-pointer"
-                    >
-                      Predict Community Decision
-                    </button>
-                  </form>
-
-                  {votePrediction && (
-                    <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-xs text-amber-200">
-                      {votePrediction}
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-slate-800 text-xs text-slate-400 space-y-1">
-                    <p>HyperScanner: 0 Scams Passed ({snapshot.scamBlocked} scam specs blocked)</p>
-                    <p>Banned Scam Creators: {snapshot.bannedCreators.join(', ')}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <HyperMindPanel
+              snapshot={snapshot}
+              proposalText={proposalText}
+              votePrediction={votePrediction}
+              onChangeProposalText={setProposalText}
+              onPredictGovernance={handlePredictGovernance}
+              onSimulateWhaleAttack={handleSimulateWhaleAttack}
+              onSimulateScamApp={handleSimulateScamApp}
+              onSimulateOracleManipulation={handleSimulateOracleManipulation}
+              onSelfHealNetwork={handleSelfHealNetwork}
+            />
           )}
 
-          {/* VIEW: Autonomous App Builder */}
           {activeTab === 'apps' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <form
-                onSubmit={handleAppSubmit}
-                className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-white">Autonomous App Builder</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Screened by Anti-Scam HyperScanner, RibaGuard AI, and NovaPurityEnforcer.
-                  </p>
-                  <p className="text-xs text-amber-300/90 mt-1.5">
-                    Forbidden: Lending with interest, Staking APY, Yield Farming, Leverage, Rug/Scam Specs
-                  </p>
-                </div>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Application Name</span>
-                  <input
-                    type="text"
-                    value={appName}
-                    onChange={(e) => setAppName(e.target.value)}
-                    placeholder="e.g. Nova Supply Chain Verifier"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    required
-                  />
-                </label>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Category</span>
-                    <select
-                      value={appCategory}
-                      onChange={(e) => setAppCategory(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    >
-                      <option value="Commerce">Commerce</option>
-                      <option value="Infrastructure">Infrastructure</option>
-                      <option value="Supply Chain">Supply Chain</option>
-                      <option value="Governance">Governance</option>
-                    </select>
-                  </label>
-
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Settlement Asset</span>
-                    <select
-                      value={paymentAsset}
-                      onChange={(e) => setPaymentAsset(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    >
-                      <option value="NVC">NVC (Fixed $3.14)</option>
-                      <option value="USDT">USDT (Volatile - Rejected)</option>
-                      <option value="BTC">BTC (External - Rejected)</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Specification</span>
-                  <textarea
-                    rows={3}
-                    value={appDescription}
-                    onChange={(e) => setAppDescription(e.target.value)}
-                    placeholder="Describe app capabilities..."
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    required
-                  />
-                </label>
-
-                {(appName || appDescription) && (
-                  <div
-                    className={`rounded-lg border px-3 py-2 text-xs flex items-center gap-2 ${
-                      appPreScan.passed
-                        ? 'border-emerald-800/40 bg-emerald-950/20 text-emerald-300'
-                        : 'border-rose-800/50 bg-rose-950/30 text-rose-200'
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4 shrink-0" />
-                    <span>{appPreScan.message}</span>
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="submit"
-                    disabled={submittingApp}
-                    className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {submittingApp ? 'Auditing & Building...' : 'Generate & Deploy NVC App'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAppName('Nova Lending APY');
-                      setAppDescription('Lending NVC with 12% APY interest');
-                      setPaymentAsset('NVC');
-                    }}
-                    className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2.5 cursor-pointer"
-                  >
-                    Test Riba App
-                  </button>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 text-xs text-sky-300 flex items-center justify-between gap-2">
-                  <span>HyperScanner: 0 Scams Passed</span>
-                  <span className="tabular-nums font-medium">{snapshot.scamBlocked} blocked</span>
-                </div>
-              </form>
-
-              <div className="lg:col-span-7 space-y-3">
-                {snapshot.apps.map((app) => (
-                  <div
-                    key={app.id}
-                    className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2.5"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-xs text-slate-400">
-                          {app.category} ·{' '}
-                          <span
-                            className={`font-medium capitalize ${
-                              app.status === 'deployed'
-                                ? 'text-emerald-300'
-                                : app.status === 'halted'
-                                  ? 'text-amber-300'
-                                  : 'text-rose-300'
-                            }`}
-                          >
-                            {app.status}
-                          </span>
-                        </div>
-                        <h3 className="text-sm font-semibold text-white mt-0.5">{app.name}</h3>
-                      </div>
-                      {app.status !== 'rejected' && (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleApp(app)}
-                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
-                        >
-                          <Power className="w-3 h-3" />
-                          {app.status === 'halted' ? 'Resume' : 'Halt'}
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-300">{app.description}</p>
-                    <p className="text-xs text-slate-400">{app.complianceReason}</p>
-                    <pre className="rounded-lg bg-slate-950 border border-slate-800 p-3 text-xs font-mono text-slate-300 overflow-x-auto">
-                      {app.manifestSnippet}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AppsPanel
+              snapshot={snapshot}
+              appName={appName}
+              appCategory={appCategory}
+              appDescription={appDescription}
+              paymentAsset={paymentAsset}
+              submittingApp={submittingApp}
+              onChangeAppName={setAppName}
+              onChangeAppCategory={setAppCategory}
+              onChangeAppDescription={setAppDescription}
+              onChangePaymentAsset={setPaymentAsset}
+              onSubmitApp={handleAppSubmit}
+              onToggleApp={handleToggleApp}
+            />
           )}
 
-          {/* VIEW: Global Oracle, Governance & SCP Block Explorer */}
           {activeTab === 'oracle' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h2 className="text-base font-semibold text-white">
-                        Global NOVA Oracle Compliance Verifier
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Nodes reporting any value other than $3.14 are flagged for community vote.
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium text-emerald-300">
-                      Stabilizer: {snapshot.stabilizerStatus}
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-slate-800/80">
-                    {snapshot.oracleNodes.map((node) => (
-                      <div
-                        key={node.id}
-                        className="py-3.5 first:pt-1 last:pb-1 flex flex-wrap items-center justify-between gap-3"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="font-mono text-slate-300">{node.id}</span>
-                            <span className="text-slate-500">·</span>
-                            <span
-                              className={`font-medium capitalize ${
-                                node.status === 'verified' ? 'text-emerald-300' : 'text-rose-300'
-                              }`}
-                            >
-                              {node.status}
-                            </span>
-                          </div>
-                          <p className="text-sm text-white mt-0.5">{node.region}</p>
-                          <p className="text-xs text-slate-400 tabular-nums">
-                            Reported: {formatUsd(node.reportedValueUsd)}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleOracleVerify(node.id, 3.14)}
-                            className="text-xs px-3 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/40 text-emerald-300 cursor-pointer whitespace-nowrap"
-                          >
-                            Sync $3.14
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOracleVerify(node.id, 3.2)}
-                            className="text-xs px-3 py-1.5 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-600/40 text-rose-300 cursor-pointer whitespace-nowrap"
-                          >
-                            Simulate Deviation
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">
-                      Mainnet Governor & Ethical Rules
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Audits all ecosystem components prior to mainnet activation.
-                    </p>
-                  </div>
-
-                  <dl className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">Nova Exclusivity</dt>
-                      <dd className="mt-1 font-medium text-white">{snapshot.rules.novaExclusivity}</dd>
-                    </div>
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">No Gambling</dt>
-                      <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noGambling}</dd>
-                    </div>
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">No Riba</dt>
-                      <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noRiba}</dd>
-                    </div>
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">Ethical AI Mode</dt>
-                      <dd className="mt-1 font-medium text-white">{snapshot.rules.ethicalAi}</dd>
-                    </div>
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">Founder Policy</dt>
-                      <dd className="mt-1 font-medium text-white">
-                        {snapshot.rules.founderAccountability}
-                      </dd>
-                    </div>
-                    <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
-                      <dt className="text-slate-400">Sharia Compliant</dt>
-                      <dd className="mt-1 font-medium text-emerald-300">
-                        {snapshot.rules.shariaCompliant}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  {metrics.isolatedOracleNodes > 0 && (
-                    <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                      <span>
-                        {metrics.isolatedOracleNodes} isolated node(s) must be restored to $3.14 before mainnet launch.
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleRunAudit}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-sm font-medium text-white px-4 py-2.5 cursor-pointer"
-                    >
-                      Run Ecosystem Compliance Audit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleLaunchMainnet}
-                      disabled={snapshot.mainnetLaunched}
-                      className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50 cursor-pointer"
-                    >
-                      {snapshot.mainnetLaunched ? 'Mainnet Launched' : 'Execute Mainnet Launch'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 1-Person = 1-Vote Community Governance Ballots */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">
-                      1-Person = 1-Vote Community Governance Ballots
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Every 1-KYC verified Citizen casts one equal vote. Proposals violating $3.14, Zero Riba, or Zero Gambling are blocked automatically.
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-slate-300">
-                    <span>Active Voter:</span>
-                    <select
-                      value={selectedCitizenId}
-                      onChange={(e) => setSelectedCitizenId(e.target.value)}
-                      className="rounded-lg bg-slate-950 border border-slate-700 px-3 py-1.5 text-xs text-white"
-                    >
-                      {snapshot.citizens.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.displayName} ({c.id}) · Rep {c.reputationScore}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                  <form
-                    onSubmit={handleCreateProposal}
-                    className="lg:col-span-4 rounded-lg border border-slate-800 bg-slate-950/70 p-4 space-y-3 h-fit"
-                  >
-                    <h3 className="text-sm font-semibold text-white">Submit Community Proposal</h3>
-                    <input
-                      type="text"
-                      value={newProposalTitle}
-                      onChange={(e) => setNewProposalTitle(e.target.value)}
-                      placeholder="Proposal title..."
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                      required
-                    />
-                    <textarea
-                      rows={2}
-                      value={newProposalDesc}
-                      onChange={(e) => setNewProposalDesc(e.target.value)}
-                      placeholder="Describe policy or real-economy upgrade..."
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs px-3 py-2 cursor-pointer"
-                    >
-                      Open Citizen Ballot
-                    </button>
-                  </form>
-
-                  <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {snapshot.proposals.map((prop) => {
-                      const alreadyVoted = prop.voters.includes(selectedCitizenId);
-                      return (
-                        <div
-                          key={prop.id}
-                          className="rounded-lg border border-slate-800 bg-slate-950/70 p-4 flex flex-col justify-between gap-3"
-                        >
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
-                              <span>{prop.category}</span>
-                              <span
-                                className={`font-medium capitalize ${
-                                  prop.status === 'passed'
-                                    ? 'text-emerald-300'
-                                    : prop.status === 'rejected'
-                                      ? 'text-rose-300'
-                                      : 'text-amber-300'
-                                }`}
-                              >
-                                {prop.status}
-                              </span>
-                            </div>
-                            <h4 className="text-sm font-semibold text-white">{prop.title}</h4>
-                            <p className="text-xs text-slate-400">{prop.description}</p>
-                            <p className="text-[11px] text-amber-300/90">{prop.aiForecast}</p>
-                          </div>
-
-                          <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                            <span className="text-xs tabular-nums text-slate-300">
-                              Yes: <strong className="text-emerald-300">{prop.yesVotes}</strong> · No:{' '}
-                              <strong className="text-rose-300">{prop.noVotes}</strong>
-                            </span>
-                            {prop.status === 'open' ? (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  disabled={alreadyVoted}
-                                  onClick={() => handleCastVote(prop.id, 'yes')}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs disabled:opacity-40 cursor-pointer"
-                                >
-                                  <Vote className="w-3 h-3" />
-                                  Yes
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={alreadyVoted}
-                                  onClick={() => handleCastVote(prop.id, 'no')}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-200 text-xs disabled:opacity-40 cursor-pointer"
-                                >
-                                  No
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-slate-500">Ballot finalized</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* SCP Consensus Block Explorer & Sealer */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">
-                      Stellar Consensus Protocol (SCP) Block Explorer
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Latest Sealed Block:{' '}
-                      <span className="text-amber-300 font-semibold tabular-nums">
-                        #{snapshot.metrics.latestBlockHeight}
-                      </span>{' '}
-                      · Zero Proof-of-Work · 0.04 Wh per finality round.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSealScpBlock}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs px-3.5 py-2 whitespace-nowrap shrink-0 cursor-pointer"
-                  >
-                    <Cpu className="w-3.5 h-3.5" />
-                    Seal SCP Block
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-2 pr-3 font-medium">Height</th>
-                        <th className="py-2 px-3 font-medium">Transactions</th>
-                        <th className="py-2 px-3 font-medium">Settled Value</th>
-                        <th className="py-2 px-3 font-medium">Validator Quorum</th>
-                        <th className="py-2 px-3 font-medium">Energy</th>
-                        <th className="py-2 pl-3 font-medium">Block Hash</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {snapshot.scpBlocks.map((blk) => (
-                        <tr key={blk.height} className="hover:bg-slate-800/30">
-                          <td className="py-2.5 pr-3 font-mono font-semibold text-amber-300 tabular-nums">
-                            #{blk.height}
-                          </td>
-                          <td className="py-2.5 px-3 tabular-nums text-white">{blk.txCount} tx</td>
-                          <td className="py-2.5 px-3 tabular-nums text-emerald-300">
-                            {blk.totalNvc} NVC ({blk.totalMicronNova.toLocaleString()} µNVC)
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-300">{blk.quorum}</td>
-                          <td className="py-2.5 px-3 tabular-nums text-slate-300">{blk.energyWh} Wh</td>
-                          <td className="py-2.5 pl-3 font-mono text-[11px] text-slate-400">
-                            {blk.hash.slice(0, 22)}...
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <OracleScpPanel
+              snapshot={snapshot}
+              selectedCitizenId={selectedCitizenId}
+              newProposalTitle={newProposalTitle}
+              newProposalDesc={newProposalDesc}
+              onChangeSelectedCitizenId={setSelectedCitizenId}
+              onChangeNewProposalTitle={setNewProposalTitle}
+              onChangeNewProposalDesc={setNewProposalDesc}
+              onOracleVerify={handleOracleVerify}
+              onRunAudit={handleRunAudit}
+              onLaunchMainnet={handleLaunchMainnet}
+              onCreateProposal={handleCreateProposal}
+              onCastVote={handleCastVote}
+              onSealScpBlock={handleSealScpBlock}
+            />
           )}
 
-          {/* VIEW: 1-KYC Citizens, Mobile SCP Mining & 1.5x Reserve Proof */}
           {activeTab === 'citizens' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <form
-                  onSubmit={handleRegisterCitizen}
-                  className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
-                >
-                  <div>
-                    <h2 className="text-base font-semibold text-white">
-                      1-Person = 1-KYC Citizen Onboarding
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Mobile-first fair distribution protected by Anti-Sybil HyperGuard and 0.01% max wallet cap (10M NVC).
-                    </p>
-                  </div>
-
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Citizen Full Name</span>
-                    <input
-                      type="text"
-                      value={newCitizenName}
-                      onChange={(e) => setNewCitizenName(e.target.value)}
-                      placeholder="e.g. Tariq Al-Mansoor"
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                      required
-                    />
-                  </label>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="block text-xs text-slate-300 space-y-1">
-                      <span>Region</span>
-                      <select
-                        value={newCitizenRegion}
-                        onChange={(e) => setNewCitizenRegion(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                      >
-                        <option value="Asia-Pacific (ID)">Asia-Pacific (ID)</option>
-                        <option value="Middle East (AE)">Middle East (AE)</option>
-                        <option value="Europe (EU)">Europe (EU)</option>
-                        <option value="North America (US)">North America (US)</option>
-                        <option value="Africa (NG)">Africa (NG)</option>
-                      </select>
-                    </label>
-                    <label className="block text-xs text-slate-300 space-y-1">
-                      <span>Mobile Device ID</span>
-                      <input
-                        type="text"
-                        value={newCitizenDevice}
-                        onChange={(e) => setNewCitizenDevice(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm font-mono text-white"
-                        required
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="submit"
-                      className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 cursor-pointer"
-                    >
-                      Verify 1-KYC Citizen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewCitizenName('Sybil Clone Attempt');
-                        setNewCitizenDevice('DEV-RASPI-09');
-                      }}
-                      className="rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-medium px-3 py-2.5 cursor-pointer"
-                    >
-                      Test Sybil Device
-                    </button>
-                  </div>
-
-                  {/* Live NVC <-> USD <-> Micron Nova Utility Converter */}
-                  <div className="pt-4 border-t border-slate-800 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-white">Real-Economy Settlement Converter</span>
-                      <span className="text-slate-400">0% Interest · $0.001 SCP Fee</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 items-center">
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={converterNvc}
-                        onChange={(e) => setConverterNvc(e.target.value)}
-                        className="rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm tabular-nums text-white"
-                      />
-                      <div className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs tabular-nums">
-                        <span className="text-slate-400 block">USD Value</span>
-                        <strong className="text-emerald-300">
-                          {formatUsd(nvcToUsd(Number(converterNvc) || 0))}
-                        </strong>
-                      </div>
-                      <div className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-xs tabular-nums">
-                        <span className="text-slate-400 block">Micron Nova</span>
-                        <strong className="text-amber-300">
-                          {formatMicronNova(Number(converterNvc) || 0)}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                </form>
-
-                <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-semibold text-white">
-                        Mobile SCP Mining & Verified Citizens ({snapshot.metrics.verifiedCitizens})
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Zero Proof-of-Work waste. Every mobile mining payout is validated by NovaHyperMind at $3.14.
-                      </p>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <span>Mine Reward:</span>
-                      <select
-                        value={mineAmountNvc}
-                        onChange={(e) => setMineAmountNvc(e.target.value)}
-                        className="rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white tabular-nums"
-                      >
-                        <option value="0.286624">0.286624 NVC (286,624 µNVC)</option>
-                        <option value="1">1.00 NVC (1,000,000 µNVC)</option>
-                        <option value="5">5.00 NVC (5,000,000 µNVC)</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  {miningNotice && (
-                    <div
-                      role="status"
-                      className="flex items-center justify-between gap-2 rounded-lg border border-emerald-700/60 bg-emerald-950/60 px-3.5 py-2.5 text-xs text-emerald-200"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                        <span className="tabular-nums">
-                          {miningNotice.citizenId} mined {miningNotice.amount} NVC (
-                          {formatMicronNova(miningNotice.amount)} ={' '}
-                          {formatUsd(nvcToUsd(miningNotice.amount))}) · Session #{miningNotice.sessions}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-emerald-300/80 tabular-nums shrink-0">
-                        {new Date(miningNotice.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-800 text-slate-400">
-                          <th className="py-2 pr-3 font-medium">Citizen & Device</th>
-                          <th className="py-2 px-3 font-medium">Region</th>
-                          <th className="py-2 px-3 font-medium text-right">Reputation</th>
-                          <th className="py-2 px-3 font-medium text-right">Balance (NVC / USD)</th>
-                          <th className="py-2 pl-3 font-medium text-right">Mobile SCP</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/70">
-                        {snapshot.citizens.map((citizen) => (
-                          <tr key={citizen.id} className="hover:bg-slate-800/30">
-                            <td className="py-3 pr-3">
-                              <div className="font-medium text-white">{citizen.displayName}</div>
-                              <div className="font-mono text-[11px] text-slate-400">
-                                {citizen.id} · {citizen.deviceFingerprint}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-slate-300">{citizen.region}</td>
-                            <td className="py-3 px-3 text-right tabular-nums text-emerald-300 font-medium">
-                              {citizen.reputationScore}/100
-                            </td>
-                            <td className="py-3 px-3 text-right tabular-nums">
-                              <div className="text-white font-semibold">
-                                {citizen.balanceNvc.toFixed(4)} NVC
-                              </div>
-                              <div className="text-[11px] text-slate-400">
-                                {formatUsd(nvcToUsd(citizen.balanceNvc))} · {citizen.miningSessions} sessions
-                              </div>
-                            </td>
-                            <td className="py-3 pl-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleMobileMine(citizen.id)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-medium whitespace-nowrap cursor-pointer"
-                              >
-                                <Smartphone className="w-3.5 h-3.5" />
-                                Mine NVC
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* Closed-Loop 1-KYC Citizen P2P Instant Transfer */}
-              <form
-                onSubmit={handleCitizenP2P}
-                className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4"
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-white">
-                    Closed-Loop 1-KYC Citizen P2P Transfer
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Zero-interest direct transfers between verified Citizens at 1 NVC = $3.14 USD ({formatMicronNova(Number(p2pAmount) || 0)}).
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>From Citizen</span>
-                    <select
-                      value={p2pFromCitizen}
-                      onChange={(e) => setP2pFromCitizen(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                    >
-                      {snapshot.citizens.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.displayName} ({c.balanceNvc.toFixed(2)} NVC)
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>To Citizen</span>
-                    <select
-                      value={p2pToCitizen}
-                      onChange={(e) => setP2pToCitizen(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                    >
-                      {snapshot.citizens.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.displayName} ({c.balanceNvc.toFixed(2)} NVC)
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Amount (NVC)</span>
-                    <input
-                      type="number"
-                      min="0.000001"
-                      step="any"
-                      value={p2pAmount}
-                      onChange={(e) => setP2pAmount(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs tabular-nums text-white"
-                      required
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs px-4 py-2.5 whitespace-nowrap cursor-pointer"
-                  >
-                    Send P2P NVC
-                  </button>
-                </div>
-              </form>
-
-              {/* 1.5x Reserve Proof-of-Collateral Ledger */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-semibold text-white">
-                      1.5x Real-Economy Reserve Proof-of-Collateral
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      $471.00B audited Halal real-economy assets backing $314.00B NVC network peg value ({snapshot.metrics.collateralRatioActual}x actual vs {constants.collateralRatio}x target).
-                    </p>
-                  </div>
-                  <span className="text-xs font-medium text-emerald-300">
-                    100% Riba-Free Custody · Audited
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400">
-                        <th className="py-2 pr-3 font-medium">Asset Class</th>
-                        <th className="py-2 px-3 font-medium">Custody & Structure</th>
-                        <th className="py-2 px-3 font-medium text-right">Share</th>
-                        <th className="py-2 px-3 font-medium text-right">Audited Backing (USD)</th>
-                        <th className="py-2 pl-3 font-medium text-right">Sharia Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {snapshot.collateralReserves.map((res) => (
-                        <tr key={res.id} className="hover:bg-slate-800/30">
-                          <td className="py-3 pr-3 font-medium text-white">{res.assetClass}</td>
-                          <td className="py-3 px-3 text-slate-300">{res.custodyType}</td>
-                          <td className="py-3 px-3 text-right tabular-nums text-amber-300 font-medium">
-                            {res.sharePercent}%
-                          </td>
-                          <td className="py-3 px-3 text-right tabular-nums text-white font-semibold">
-                            ${(res.backingUsd / 1e9).toFixed(1)}B
-                          </td>
-                          <td className="py-3 pl-3 text-right text-emerald-300 font-medium">
-                            {res.halalCertified ? 'Halal · 0% Interest' : 'Pending'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <CitizensReservesPanel
+              snapshot={snapshot}
+              newCitizenName={newCitizenName}
+              newCitizenRegion={newCitizenRegion}
+              newCitizenDevice={newCitizenDevice}
+              mineAmountNvc={mineAmountNvc}
+              converterNvc={converterNvc}
+              p2pFromCitizen={p2pFromCitizen}
+              p2pToCitizen={p2pToCitizen}
+              p2pAmount={p2pAmount}
+              miningNotice={miningNotice}
+              onChangeNewCitizenName={setNewCitizenName}
+              onChangeNewCitizenRegion={setNewCitizenRegion}
+              onChangeNewCitizenDevice={setNewCitizenDevice}
+              onChangeMineAmountNvc={setMineAmountNvc}
+              onChangeConverterNvc={setConverterNvc}
+              onChangeP2pFromCitizen={setP2pFromCitizen}
+              onChangeP2pToCitizen={setP2pToCitizen}
+              onChangeP2pAmount={setP2pAmount}
+              onRegisterCitizen={handleRegisterCitizen}
+              onMobileMine={handleMobileMine}
+              onCitizenP2P={handleCitizenP2P}
+            />
           )}
 
-          {/* VIEW: Real-Economy NVC Marketplace & Halal Mudarabah Escrow */}
           {activeTab === 'marketplace' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <form
-                onSubmit={handleCreateListing}
-                className="lg:col-span-4 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
-              >
-                <div>
-                  <h2 className="text-base font-semibold text-white">
-                    List Real-Economy Good or Mudarabah
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Every listing is screened by RibaGuard AI & HyperScanner. Fixed 1 NVC = $3.14 USD settlement.
-                  </p>
-                </div>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Listing Title</span>
-                  <input
-                    type="text"
-                    value={mktTitle}
-                    onChange={(e) => setMktTitle(e.target.value)}
-                    placeholder="e.g. Solar Irrigation Pump Kit"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
-                    required
-                  />
-                </label>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Category</span>
-                    <select
-                      value={mktCategory}
-                      onChange={(e) => setMktCategory(e.target.value as typeof mktCategory)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                    >
-                      <option value="Physical Goods">Physical Goods</option>
-                      <option value="Clean Energy">Clean Energy</option>
-                      <option value="Logistics">Logistics</option>
-                      <option value="Halal Mudarabah">Halal Mudarabah</option>
-                    </select>
-                  </label>
-                  <label className="block text-xs text-slate-300 space-y-1">
-                    <span>Price (NVC)</span>
-                    <input
-                      type="number"
-                      min="0.001"
-                      step="any"
-                      value={mktPriceNvc}
-                      onChange={(e) => setMktPriceNvc(e.target.value)}
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs tabular-nums text-white"
-                      required
-                    />
-                  </label>
-                </div>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Settlement Model</span>
-                  <select
-                    value={mktSettlementModel}
-                    onChange={(e) => setMktSettlementModel(e.target.value as typeof mktSettlementModel)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                  >
-                    <option value="Direct Real Trade">Direct Real Trade</option>
-                    <option value="Fee-Based Service">Fee-Based Service</option>
-                    <option value="Mudarabah Profit-Share (0% Interest)">Mudarabah Profit-Share (0% Interest)</option>
-                  </select>
-                </label>
-
-                <label className="block text-xs text-slate-300 space-y-1">
-                  <span>Description</span>
-                  <textarea
-                    rows={3}
-                    value={mktDesc}
-                    onChange={(e) => setMktDesc(e.target.value)}
-                    placeholder="Real goods or 0% interest Mudarabah share..."
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                    required
-                  />
-                </label>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 cursor-pointer"
-                  >
-                    Publish NVC Listing
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMktTitle('15% Fixed APR Credit Loan');
-                      setMktDesc('Borrow NVC with 15% interest APR lending yield');
-                    }}
-                    className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2.5 cursor-pointer"
-                  >
-                    Test Riba Listing
-                  </button>
-                </div>
-              </form>
-
-              <div className="lg:col-span-8 space-y-4">
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-semibold text-white">
-                        Real-Economy Commerce & Mudarabah Catalog
-                      </h2>
-                      <p className="text-xs text-slate-400">
-                        Total Marketplace Settled Volume: {snapshot.metrics.marketplaceVolumeNvc} NVC ({formatUsd(nvcToUsd(snapshot.metrics.marketplaceVolumeNvc))})
-                      </p>
-                    </div>
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <span>Buyer Wallet:</span>
-                      <select
-                        value={selectedCitizenId}
-                        onChange={(e) => setSelectedCitizenId(e.target.value)}
-                        className="rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white"
-                      >
-                        {snapshot.citizens.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.displayName} ({c.balanceNvc.toFixed(2)} NVC)
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {snapshot.marketplaceListings.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-lg border border-slate-800 bg-slate-950/70 p-4 flex flex-col justify-between gap-3"
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs text-slate-400">
-                            <span>{item.category} · {item.merchantName}</span>
-                            <span className="tabular-nums text-emerald-300">
-                              {item.stock} left
-                            </span>
-                          </div>
-                          <h3 className="text-sm font-semibold text-white">{item.title}</h3>
-                          <p className="text-xs text-slate-400">{item.description}</p>
-                          <p className="text-[11px] text-amber-300/90">{item.settlementModel}</p>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                          <div className="tabular-nums">
-                            <div className="text-sm font-semibold text-white">
-                              {item.priceNvc} NVC · {formatUsd(nvcToUsd(item.priceNvc))}
-                            </div>
-                            <div className="text-[11px] text-slate-400">
-                              {formatMicronNova(item.priceNvc)} · {item.soldCount} sold
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={item.stock < 1}
-                            onClick={() => handleBuyListing(item.id)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs whitespace-nowrap disabled:opacity-40 cursor-pointer"
-                          >
-                            Pay with NVC
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {snapshot.marketplaceOrders.length > 0 && (
-                  <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
-                    <h3 className="text-sm font-semibold text-white">
-                      Recent Real-Economy Settlements ({snapshot.marketplaceOrders.length})
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b border-slate-800 text-slate-400">
-                            <th className="py-2 pr-3 font-medium">Order / TX</th>
-                            <th className="py-2 px-3 font-medium">Item</th>
-                            <th className="py-2 px-3 font-medium">Buyer</th>
-                            <th className="py-2 pl-3 font-medium text-right">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/70">
-                          {snapshot.marketplaceOrders.map((ord) => (
-                            <tr key={ord.id}>
-                              <td className="py-2 pr-3 font-mono text-[11px] text-slate-300">{ord.txId}</td>
-                              <td className="py-2 px-3 text-white">{ord.listingTitle}</td>
-                              <td className="py-2 px-3 font-mono text-[11px] text-slate-400">{ord.buyerId}</td>
-                              <td className="py-2 pl-3 text-right tabular-nums text-emerald-300 font-medium">
-                                {ord.amountNvc} NVC ({formatUsd(ord.usdEquivalent)})
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <form
-                  onSubmit={handleDistributeMudarabah}
-                  className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4"
-                >
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">
-                      Halal Mudarabah Profit-Sharing Distribution (0% Interest)
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Real operating surplus shared across Citizen co-op partners ({snapshot.metrics.mudarabahDistributedNvc} NVC distributed to date).
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                    <label className="block text-xs text-slate-300 space-y-1">
-                      <span>Net Profit (NVC)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={mudarabahProfitNvc}
-                        onChange={(e) => setMudarabahProfitNvc(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs tabular-nums text-white"
-                        required
-                      />
-                    </label>
-                    <label className="block text-xs text-slate-300 space-y-1">
-                      <span>Partner Share (%)</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="90"
-                        value={mudarabahRatio}
-                        onChange={(e) => setMudarabahRatio(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs tabular-nums text-white"
-                        required
-                      />
-                    </label>
-                    <label className="block text-xs text-slate-300 space-y-1 md:col-span-2">
-                      <span>Operational Note</span>
-                      <input
-                        type="text"
-                        value={mudarabahNote}
-                        onChange={(e) => setMudarabahNote(e.target.value)}
-                        className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"
-                        required
-                      />
-                    </label>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs px-4 py-2 whitespace-nowrap cursor-pointer"
-                    >
-                      Distribute Halal Surplus
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMudarabahNote('Guaranteed 10% fixed interest payout')}
-                      className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2 whitespace-nowrap cursor-pointer"
-                    >
-                      Test Riba Note
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
+            <MarketplacePanel
+              snapshot={snapshot}
+              selectedCitizenId={selectedCitizenId}
+              mktTitle={mktTitle}
+              mktCategory={mktCategory}
+              mktSettlementModel={mktSettlementModel}
+              mktPriceNvc={mktPriceNvc}
+              mktDesc={mktDesc}
+              mudarabahProfitNvc={mudarabahProfitNvc}
+              mudarabahRatio={mudarabahRatio}
+              mudarabahNote={mudarabahNote}
+              onChangeSelectedCitizenId={setSelectedCitizenId}
+              onChangeMktTitle={setMktTitle}
+              onChangeMktCategory={setMktCategory}
+              onChangeMktSettlementModel={setMktSettlementModel}
+              onChangeMktPriceNvc={setMktPriceNvc}
+              onChangeMktDesc={setMktDesc}
+              onChangeMudarabahProfitNvc={setMudarabahProfitNvc}
+              onChangeMudarabahRatio={setMudarabahRatio}
+              onChangeMudarabahNote={setMudarabahNote}
+              onCreateListing={handleCreateListing}
+              onBuyListing={handleBuyListing}
+              onDistributeMudarabah={handleDistributeMudarabah}
+            />
           )}
 
-          {/* VIEW: Immutable Audit Trail */}
           {activeTab === 'audit' && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-white">SHA-256 Audit Trail Logger</h2>
-                  <span className="text-xs text-slate-400">
-                    {snapshot.auditLog.length} entries · Immutable cryptographic trail
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={auditSearch}
-                      onChange={(e) => setAuditSearch(e.target.value)}
-                      placeholder="Filter audit log..."
-                      className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white w-48"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleVerifyAuditChain}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-medium cursor-pointer whitespace-nowrap"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Verify SHA-256 Chain
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExportAuditJson}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer whitespace-nowrap"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Export JSON
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetEcosystem}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium cursor-pointer whitespace-nowrap"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Reset Baseline
-                  </button>
-                </div>
-              </div>
-              <div className="divide-y divide-slate-800/80 max-h-[540px] overflow-y-auto pr-1">
-                {snapshot.auditLog
-                  .filter((entry) => {
-                    const q = auditSearch.trim().toLowerCase();
-                    if (!q) return true;
-                    return (
-                      entry.module.toLowerCase().includes(q) ||
-                      entry.action.toLowerCase().includes(q) ||
-                      entry.detail.toLowerCase().includes(q)
-                    );
-                  })
-                  .map((entry) => (
-                    <div key={entry.id} className="py-3 first:pt-1 last:pb-1 flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-amber-300">{entry.module}</span>
-                          <span className="text-slate-600">·</span>
-                          <span className="font-mono text-slate-400">{entry.action}</span>
-                        </div>
-                        <span className="text-slate-500 tabular-nums">
-                          {new Date(entry.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-200">{entry.detail}</p>
-                      <p className="font-mono text-[11px] text-slate-500 truncate">
-                        sha256:{entry.hash}
-                      </p>
-                    </div>
-                  ))}
-              </div>
-            </div>
+            <AuditPanel
+              snapshot={snapshot}
+              onVerifyAuditChain={handleVerifyAuditChain}
+              onExportAuditJson={handleExportAuditJson}
+              onResetEcosystem={handleResetEcosystem}
+            />
           )}
         </main>
       </div>
+
+      {provenanceQuery !== null && (
+        <ProvenanceModal
+          snapshot={snapshot}
+          initialQuery={provenanceQuery}
+          onClose={() => setProvenanceQuery(null)}
+        />
+      )}
     </div>
   );
 }
