@@ -18,6 +18,7 @@ import {
   type NovaAppRecord,
   type NovaTransaction,
   type OracleNode,
+  type ScpBlock,
 } from './shared/novaPolicy.ts';
 import { NovaHyperMind } from './server/hypermind.ts';
 import { clearPersistedData, loadPersistedData, savePersistedData } from './server/storage.ts';
@@ -41,6 +42,8 @@ interface EcosystemState {
   collateralReserves: CollateralReserveItem[];
   marketplaceListings: MarketplaceListing[];
   marketplaceOrders: MarketplaceOrder[];
+  scpBlocks: ScpBlock[];
+  mudarabahDistributedNvc: number;
 }
 
 function createInitialState(): EcosystemState {
@@ -341,6 +344,21 @@ function createInitialState(): EcosystemState {
     },
   ],
   marketplaceOrders: [],
+  scpBlocks: [
+    {
+      height: 1042,
+      hash: sha256({ height: 1042, txIds: ['tx-nvc-001', 'tx-nvc-002'], peg: NovaPolicy.fixedValueUsd }),
+      previousHash: sha256({ height: 1041, genesis: 'stellar-nova-core' }),
+      txIds: ['tx-nvc-001', 'tx-nvc-002'],
+      txCount: 2,
+      totalNvc: 25.286624,
+      totalMicronNova: 25_286_624,
+      quorum: '3/3 SCP Validators',
+      energyWh: 0.04,
+      sealedAt: new Date(nowMs - 1000 * 60 * 10).toISOString(),
+    },
+  ],
+  mudarabahDistributedNvc: 14.2,
   };
 }
 
@@ -422,6 +440,11 @@ function hydrateFromPersistence() {
         ? persisted.state.marketplaceListings
         : defaults.marketplaceListings,
       marketplaceOrders: persisted.state.marketplaceOrders || [],
+      scpBlocks: persisted.state.scpBlocks?.length ? persisted.state.scpBlocks : defaults.scpBlocks,
+      mudarabahDistributedNvc:
+        typeof persisted.state.mudarabahDistributedNvc === 'number'
+          ? persisted.state.mudarabahDistributedNvc
+          : defaults.mudarabahDistributedNvc,
     };
     hyperMind.threatsBlocked = persisted.hyperMind.threatsBlocked ?? hyperMind.threatsBlocked;
     hyperMind.scamBlocked = persisted.hyperMind.scamBlocked ?? hyperMind.scamBlocked;
@@ -498,6 +521,8 @@ function buildSnapshot(): EcosystemSnapshot {
       openProposals: state.proposals.filter((p) => p.status === 'open').length,
       collateralRatioActual,
       marketplaceVolumeNvc,
+      latestBlockHeight: state.scpBlocks[0]?.height || 1042,
+      mudarabahDistributedNvc: Number(state.mudarabahDistributedNvc.toFixed(4)),
     },
     transactions: state.transactions,
     apps: state.apps,
@@ -511,6 +536,7 @@ function buildSnapshot(): EcosystemSnapshot {
     collateralReserves: state.collateralReserves,
     marketplaceListings: state.marketplaceListings,
     marketplaceOrders: state.marketplaceOrders,
+    scpBlocks: state.scpBlocks,
   };
 }
 
@@ -547,7 +573,7 @@ app.post('/api/hyper/whale-check', (req: Request, res: Response) => {
 
   const result = hyperMind.checkWhaleAndSybil({ wallet, amount, deviceFingerprint });
   if (!result.allowed) {
-    appendAudit('HyperMind', 'WHALE_SYBIL_BLOCK', 'rejected', result.reason);
+    appendAudit('HyperMind', 'WHALE_ATTACK_BLOCKED', 'rejected', `Whale Attack Blocked — ${result.reason}`);
   }
   res.status(result.allowed ? 200 : 403).json({
     ...result,
@@ -563,12 +589,18 @@ app.post('/api/hyper/compliance-check', (req: Request, res: Response) => {
 
   const check = hyperMind.scanCompliance({ memo, spec, category });
   if (!check.passed) {
+    const isScam = check.violations.some((v) => v.category === 'Scam / Rug');
     hyperMind.recordLog(
-      'Hyper-Compliance & HyperScanner',
+      isScam ? 'Anti-Scam & Anti-Rug HyperScanner' : 'Hyper-Compliance & HyperScanner',
       `Blocked non-compliant payload: ${check.violations.map((v) => `${v.category} ("${v.keyword}")`).join(', ')}`,
       'blocked',
     );
-    appendAudit('RibaGuard', 'HYPER_COMPLIANCE_BLOCK', 'rejected', check.reason);
+    appendAudit(
+      isScam ? 'HyperScanner' : 'RibaGuard',
+      isScam ? 'SCAM_APP_BLOCKED' : 'HYPER_COMPLIANCE_BLOCK',
+      'rejected',
+      isScam ? `Scam App Blocked — ${check.reason}` : check.reason,
+    );
   }
 
   res.status(check.passed ? 200 : 403).json({
@@ -736,6 +768,24 @@ function handleNovaTransaction(req: Request, res: Response) {
     hash: sha256({ sender, recipient, amount, source, memo, reportedValueUsd, timestamp }),
     timestamp,
   };
+
+  if (status === 'accepted' && source.toLowerCase() === 'p2p') {
+    const senderCitizen = state.citizens.find((c) => c.id === sender);
+    const recipientCitizen = state.citizens.find((c) => c.id === recipient);
+    if (senderCitizen && senderCitizen.id !== recipient) {
+      if (senderCitizen.balanceNvc < amount) {
+        res.status(409).json({
+          error: `Insufficient P2P balance: ${senderCitizen.id} holds ${senderCitizen.balanceNvc.toFixed(4)} NVC, tried to send ${amount} NVC.`,
+          snapshot: buildSnapshot(),
+        });
+        return;
+      }
+      senderCitizen.balanceNvc = Number((senderCitizen.balanceNvc - amount).toFixed(6));
+    }
+    if (recipientCitizen && recipientCitizen.id !== sender) {
+      recipientCitizen.balanceNvc = Number((recipientCitizen.balanceNvc + amount).toFixed(6));
+    }
+  }
 
   state.transactions.unshift(tx);
   if (analysis.violationType === 'riba') {
@@ -1301,6 +1351,126 @@ app.post('/api/marketplace/buy', (req: Request, res: Response) => {
   persistNow();
 
   res.status(201).json({ order, transaction: tx, snapshot: buildSnapshot() });
+});
+
+// Halal Mudarabah 0%-Interest Profit-Sharing Distribution
+app.post('/api/marketplace/mudarabah/distribute', (req: Request, res: Response) => {
+  const listingId = String(req.body?.listingId || 'mkt-mudarabah-bakery').trim();
+  const netProfitNvc = Number(req.body?.netProfitNvc);
+  const partnerSharePercent = Number(req.body?.partnerSharePercent ?? 70);
+  const note = String(req.body?.note || 'Real-economy operating surplus settlement').trim();
+
+  if (!Number.isFinite(netProfitNvc) || netProfitNvc < 0 || netProfitNvc > 10_000) {
+    res.status(400).json({ error: 'Valid non-negative net operating profit (0 to 10,000 NVC) is required.' });
+    return;
+  }
+  if (!Number.isFinite(partnerSharePercent) || partnerSharePercent <= 0 || partnerSharePercent > 90) {
+    res.status(400).json({ error: 'Partner Mudarabah ratio must be between 1% and 90%.' });
+    return;
+  }
+
+  const scan = hyperMind.scanCompliance({ memo: note, spec: 'mudarabah profit sharing' });
+  if (!scan.passed) {
+    appendAudit('RibaGuard', 'MUDARABAH_REJECTED', 'rejected', scan.reason);
+    res.status(403).json({ error: scan.reason, snapshot: buildSnapshot() });
+    return;
+  }
+
+  const listing = state.marketplaceListings.find((l) => l.id === listingId) || state.marketplaceListings[0];
+  const distributableNvc = Number(((netProfitNvc * partnerSharePercent) / 100).toFixed(6));
+  const recipients = state.citizens.slice(0, 3);
+  const perCitizenNvc = recipients.length > 0 ? Number((distributableNvc / recipients.length).toFixed(6)) : 0;
+
+  const timestamp = new Date().toISOString();
+  if (distributableNvc > 0 && perCitizenNvc > 0) {
+    for (const c of recipients) {
+      c.balanceNvc = Number((c.balanceNvc + perCitizenNvc).toFixed(6));
+      c.reputationScore = Math.min(100, c.reputationScore + 1);
+    }
+    const tx: NovaTransaction = {
+      id: `tx-mudarabah-${Date.now().toString(36)}`,
+      sender: listing?.merchantId || 'NVC-MUDARABAH-POOL',
+      recipient: `${recipients.length}-CITIZEN-COOP`,
+      amount: distributableNvc,
+      micronNova: Math.round(distributableNvc * NovaPolicy.micronNovaPerNvc),
+      source: 'contribution_rewards',
+      memo: `Halal Mudarabah (${partnerSharePercent}/${100 - partnerSharePercent}) surplus: ${note}`,
+      reportedValueUsd: NovaPolicy.fixedValueUsd,
+      status: 'accepted',
+      reason: 'Verified 0% Interest Halal Mudarabah real-revenue profit-sharing at $3.14 peg.',
+      ribaRejected: false,
+      gamblingRejected: false,
+      exchangeRejected: false,
+      riskScore: 2,
+      purityScore: 1.0,
+      hash: sha256({ listingId: listing?.id, distributableNvc, timestamp }),
+      timestamp,
+    };
+    state.transactions.unshift(tx);
+    state.mudarabahDistributedNvc = Number((state.mudarabahDistributedNvc + distributableNvc).toFixed(6));
+  }
+
+  appendAudit(
+    'Nova',
+    'MUDARABAH_DISTRIBUTED',
+    'accepted',
+    distributableNvc === 0
+      ? `Mudarabah cycle settled at 0 NVC surplus (0% guaranteed interest — shared operational outcome).`
+      : `Distributed ${distributableNvc} NVC (${Math.round(distributableNvc * NovaPolicy.micronNovaPerNvc).toLocaleString()} µNVC) across ${recipients.length} Citizen co-op partners (${perCitizenNvc} NVC each).`,
+  );
+
+  res.status(201).json({
+    distributableNvc,
+    perCitizenNvc,
+    recipientCount: recipients.length,
+    snapshot: buildSnapshot(),
+  });
+});
+
+// Stellar Consensus Protocol (SCP) Ledger Block Sealer
+app.post('/api/scp/seal', (_req: Request, res: Response) => {
+  const sealedTxIds = new Set(state.scpBlocks.flatMap((b) => b.txIds));
+  const pendingAccepted = state.transactions.filter(
+    (t) => t.status === 'accepted' && !sealedTxIds.has(t.id),
+  );
+  const latest = state.scpBlocks[0];
+  const nextHeight = (latest?.height || 1042) + 1;
+  const verifiedNodes = state.oracleNodes.filter((n) => n.status === 'verified').length;
+  const totalNvc = Number(pendingAccepted.reduce((s, t) => s + t.amount, 0).toFixed(6));
+  const totalMicronNova = Math.round(totalNvc * NovaPolicy.micronNovaPerNvc);
+  const sealedAt = new Date().toISOString();
+
+  const block: ScpBlock = {
+    height: nextHeight,
+    hash: sha256({
+      height: nextHeight,
+      previousHash: latest?.hash || 'genesis',
+      txIds: pendingAccepted.map((t) => t.id),
+      sealedAt,
+    }),
+    previousHash: latest?.hash || sha256({ height: 1041, genesis: 'stellar-nova-core' }),
+    txIds: pendingAccepted.map((t) => t.id),
+    txCount: pendingAccepted.length,
+    totalNvc,
+    totalMicronNova,
+    quorum: `${verifiedNodes}/${state.oracleNodes.length} SCP Validators`,
+    energyWh: 0.04,
+    sealedAt,
+  };
+
+  state.scpBlocks.unshift(block);
+  if (state.scpBlocks.length > 30) {
+    state.scpBlocks.pop();
+  }
+
+  appendAudit(
+    'Oracle',
+    'SCP_BLOCK_SEALED',
+    'accepted',
+    `Sealed SCP Block #${block.height} (${block.txCount} tx, ${block.totalNvc} NVC, ${block.quorum}, ${block.energyWh} Wh).`,
+  );
+
+  res.status(201).json({ block, snapshot: buildSnapshot() });
 });
 
 // Audit Integrity Verification & Clean Demo Reset

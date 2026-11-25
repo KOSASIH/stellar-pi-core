@@ -13,6 +13,7 @@ import type {
   NovaAppRecord,
   NovaTransaction,
   OracleNode,
+  ScpBlock,
 } from '../shared/novaPolicy.ts';
 
 export interface PersistedEcosystemData {
@@ -33,6 +34,8 @@ export interface PersistedEcosystemData {
     collateralReserves: CollateralReserveItem[];
     marketplaceListings: MarketplaceListing[];
     marketplaceOrders: MarketplaceOrder[];
+    scpBlocks?: ScpBlock[];
+    mudarabahDistributedNvc?: number;
   };
   hyperMind: {
     threatsBlocked: number;

@@ -241,6 +241,19 @@ export interface MarketplaceOrder {
   timestamp: string;
 }
 
+export interface ScpBlock {
+  height: number;
+  hash: string;
+  previousHash: string;
+  txIds: string[];
+  txCount: number;
+  totalNvc: number;
+  totalMicronNova: number;
+  quorum: string;
+  energyWh: number;
+  sealedAt: string;
+}
+
 export interface EcosystemSnapshot {
   constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
@@ -269,6 +282,8 @@ export interface EcosystemSnapshot {
     openProposals: number;
     collateralRatioActual: number;
     marketplaceVolumeNvc: number;
+    latestBlockHeight: number;
+    mudarabahDistributedNvc: number;
   };
   transactions: NovaTransaction[];
   apps: NovaAppRecord[];
@@ -282,5 +297,6 @@ export interface EcosystemSnapshot {
   collateralReserves: CollateralReserveItem[];
   marketplaceListings: MarketplaceListing[];
   marketplaceOrders: MarketplaceOrder[];
+  scpBlocks: ScpBlock[];
 }
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "savedAt": "2026-11-25T08:45:46.292Z",
+  "savedAt": "2026-11-25T09:11:43.846Z",
   "state": {
     "mainnetLaunched": false,
     "complianceBreached": false,
@@ -34,7 +34,7 @@
         "riskScore": 4,
         "purityScore": 1,
         "hash": "0ab2767be686e5274a1bf97f025d88b2f7a4e919969bbb5e2aff6318888301aa",
-        "timestamp": "2026-11-25T08:27:46.290Z"
+        "timestamp": "2026-11-25T08:53:43.844Z"
       },
       {
         "id": "tx-nvc-002",
@@ -53,7 +53,7 @@
         "riskScore": 3,
         "purityScore": 1,
         "hash": "8cdd1c3f5012a9e9e1f2f0a5c5dd3ccdcef85adfb0c7a6e5e8e2e6bd414817d0",
-        "timestamp": "2026-11-25T08:34:46.290Z"
+        "timestamp": "2026-11-25T09:00:43.844Z"
       },
       {
         "id": "tx-nvc-003",
@@ -72,7 +72,7 @@
         "riskScore": 92,
         "purityScore": 0,
         "hash": "afbd79f06add12d38c076b9effde142c7a2b85727560c05b910eb3e4baada085",
-        "timestamp": "2026-11-25T08:40:46.290Z"
+        "timestamp": "2026-11-25T09:06:43.844Z"
       }
     ],
     "apps": [
@@ -85,7 +85,7 @@
         "status": "deployed",
         "complianceReason": "Passed AHI AI, HyperScanner (0 Scams), RibaGuard AI (0% interest), and NVC-exclusivity verification.",
         "manifestSnippet": "// NVC-Exclusive Settlement Contract\nconst FIXED_NVC_VALUE = 3.14;\nassertSourceAllowed([\"mining\", \"contribution_rewards\", \"p2p\", \"marketplace\", \"app\"]);",
-        "createdAt": "2026-11-25T08:00:46.290Z"
+        "createdAt": "2026-11-25T08:26:43.844Z"
       },
       {
         "id": "app-nova-logistics",
@@ -96,7 +96,7 @@
         "status": "deployed",
         "complianceReason": "Passed AHI AI, HyperScanner (0 Scams), RibaGuard AI (0% interest), and NVC-exclusivity verification.",
         "manifestSnippet": "// SCP Fair Logistics Escrow\nconst MICRON_PER_NVC = 1000000;\nconst COLLATERAL_TARGET = 1.5;",
-        "createdAt": "2026-11-25T08:20:46.290Z"
+        "createdAt": "2026-11-25T08:46:43.844Z"
       },
       {
         "id": "app-casino-nova",
@@ -107,7 +107,7 @@
         "status": "rejected",
         "complianceReason": "Rejected by NovaPurityEnforcer: gambling keyword \"casino\" violates no-gambling mandate.",
         "manifestSnippet": "// Blocked by Compliance Gate\n// Reason: Gambling applications are strictly prohibited in Stellar Nova Core.",
-        "createdAt": "2026-11-25T08:31:46.290Z"
+        "createdAt": "2026-11-25T08:57:43.844Z"
       }
     ],
     "oracleNodes": [
@@ -116,68 +116,68 @@
         "region": "North America (US)",
         "reportedValueUsd": 3.14,
         "status": "verified",
-        "lastCheckedAt": "2026-11-25T08:45:16.290Z"
+        "lastCheckedAt": "2026-11-25T09:11:13.844Z"
       },
       {
         "id": "ORACLE-ID-01",
         "region": "Asia-Pacific (ID)",
         "reportedValueUsd": 3.14,
         "status": "verified",
-        "lastCheckedAt": "2026-11-25T08:45:16.290Z"
+        "lastCheckedAt": "2026-11-25T09:11:13.844Z"
       },
       {
         "id": "ORACLE-EU-01",
         "region": "Europe (EU)",
         "reportedValueUsd": 3.14,
         "status": "verified",
-        "lastCheckedAt": "2026-11-25T08:45:16.290Z"
+        "lastCheckedAt": "2026-11-25T09:11:13.844Z"
       }
     ],
     "auditLog": [
       {
-        "id": "aud-1795596346292-7zrc",
+        "id": "aud-1795597903846-6xxl",
         "module": "Oracle",
         "action": "CONSENSUS_SYNC",
         "verdict": "accepted",
         "detail": "Oracle Predictive Shield verified 3-region quorum (ORACLE-US-01, ORACLE-ID-01, ORACLE-EU-01) at $3.14.",
-        "hash": "31fad87f000300612f6e4bd404fb178c8adbbd728b4c11f427a7e22e56f4bcde",
-        "timestamp": "2026-11-25T08:45:16.292Z"
+        "hash": "809838df1d7eed5e1ed782a77e7c15c086459fdd4578cd9a8747c0e726e04f73",
+        "timestamp": "2026-11-25T09:11:13.846Z"
       },
       {
-        "id": "aud-1795596346292-qu2k",
+        "id": "aud-1795597903845-cgwn",
         "module": "RibaGuard",
         "action": "POLICY_ARMED",
         "verdict": "info",
         "detail": "Hyper-Compliance & RibaGuard AI active: 0% Interest, Gambling-Free, Gharar-Free, Scam-Free.",
-        "hash": "7e2f783809615ebab33219a33c343185d86d5771902264175c5b6352d3b6cd47",
-        "timestamp": "2026-11-25T08:40:46.292Z"
+        "hash": "2875fa26b098456e93805a921291e02c692885e0e5a61da4771a96b8a393b6ac",
+        "timestamp": "2026-11-25T09:06:43.845Z"
       },
       {
-        "id": "aud-1795596346292-h0zg",
+        "id": "aud-1795597903845-tutn",
         "module": "Nova",
         "action": "TX_ACCEPTED",
         "verdict": "accepted",
         "detail": "tx-nvc-001 & tx-nvc-002 verified for pure mining/contribution_rewards NVC origins.",
-        "hash": "90e560615965f9bb4348449cfb5ded61850e1ac12c4838f1e4096f466684399f",
-        "timestamp": "2026-11-25T08:34:46.292Z"
+        "hash": "ca531a30e66576f3056de911ddba4b6f519d299cb17b70af947190ae439d80f2",
+        "timestamp": "2026-11-25T09:00:43.845Z"
       },
       {
-        "id": "aud-1795596346291-apw4",
+        "id": "aud-1795597903845-yn1s",
         "module": "Nova",
         "action": "PEG_IDENTITY_LOCK",
         "verdict": "accepted",
         "detail": "NovaValuePolicy & Stabilizer locked mathematical identity: 1 NVC = $3.14 USD (1,000,000 Micron Nova per NVC).",
-        "hash": "3562e9f894352afa72f8b8f4ea48fba0303b8c747417068874f2cb1912ec1018",
-        "timestamp": "2026-11-25T08:21:46.291Z"
+        "hash": "6194e07b30daa6b6fed02eb209ce0180711ba3c90d7a68c5d0cbf5da1e924289",
+        "timestamp": "2026-11-25T08:47:43.845Z"
       },
       {
-        "id": "aud-1795596346291-3lqq",
+        "id": "aud-1795597903844-lpyc",
         "module": "Nova",
         "action": "BOOT_SEQUENCE",
         "verdict": "info",
         "detail": "Initialized Stellar Nova Core + NovaHyperMind on SCP consensus with 100B NVC supply and 1.5x collateral target.",
-        "hash": "126e307e09f081c8131bc4cee1726ec3fd30c8a713865edf6a0896d5e880d6a9",
-        "timestamp": "2026-11-25T08:15:46.291Z"
+        "hash": "a1367fdf90e09eb2f18b52d4ebd3961cbe6f0b66e7cba231f02c0f1b74f25864",
+        "timestamp": "2026-11-25T08:41:43.844Z"
       }
     ],
     "citizens": [
@@ -191,7 +191,7 @@
         "balanceNvc": 142.5,
         "minedTotalNvc": 142.5,
         "miningSessions": 57,
-        "lastMinedAt": "2026-11-25T08:31:46.290Z"
+        "lastMinedAt": "2026-11-25T08:57:43.844Z"
       },
       {
         "id": "NVC-CITIZEN-US-14",
@@ -203,7 +203,7 @@
         "balanceNvc": 84.28,
         "minedTotalNvc": 84.28,
         "miningSessions": 34,
-        "lastMinedAt": "2026-11-25T08:16:46.290Z"
+        "lastMinedAt": "2026-11-25T08:42:43.844Z"
       },
       {
         "id": "NVC-CITIZEN-EU-21",
@@ -215,7 +215,7 @@
         "balanceNvc": 118,
         "minedTotalNvc": 118,
         "miningSessions": 48,
-        "lastMinedAt": "2026-11-25T08:04:46.290Z"
+        "lastMinedAt": "2026-11-25T08:30:43.844Z"
       }
     ],
     "proposals": [
@@ -232,7 +232,7 @@
           "NVC-CITIZEN-EU-21"
         ],
         "aiForecast": "91% projected APPROVE (aligned with $3.14 peg & anti-whale fairness)",
-        "createdAt": "2026-11-25T08:10:46.290Z"
+        "createdAt": "2026-11-25T08:36:43.844Z"
       },
       {
         "id": "prop-nvc-102",
@@ -247,7 +247,7 @@
           "NVC-MINER-RASPI-09"
         ],
         "aiForecast": "94% projected REJECT (violates $3.14 mathematical identity)",
-        "createdAt": "2026-11-25T08:23:46.290Z"
+        "createdAt": "2026-11-25T08:49:43.844Z"
       }
     ],
     "collateralReserves": [
@@ -258,7 +258,7 @@
         "backingUsd": 188400000000,
         "sharePercent": 40,
         "halalCertified": true,
-        "lastAuditedAt": "2026-11-25T07:45:46.290Z"
+        "lastAuditedAt": "2026-11-25T08:11:43.844Z"
       },
       {
         "id": "res-green-infra",
@@ -267,7 +267,7 @@
         "backingUsd": 141300000000,
         "sharePercent": 30,
         "halalCertified": true,
-        "lastAuditedAt": "2026-11-25T07:45:46.290Z"
+        "lastAuditedAt": "2026-11-25T08:11:43.844Z"
       },
       {
         "id": "res-trade-escrow",
@@ -276,7 +276,7 @@
         "backingUsd": 94200000000,
         "sharePercent": 20,
         "halalCertified": true,
-        "lastAuditedAt": "2026-11-25T07:45:46.290Z"
+        "lastAuditedAt": "2026-11-25T08:11:43.844Z"
       },
       {
         "id": "res-liquidity-buffer",
@@ -285,7 +285,7 @@
         "backingUsd": 47100000000,
         "sharePercent": 10,
         "halalCertified": true,
-        "lastAuditedAt": "2026-11-25T07:45:46.290Z"
+        "lastAuditedAt": "2026-11-25T08:11:43.844Z"
       }
     ],
     "marketplaceListings": [
@@ -301,7 +301,7 @@
         "stock": 18,
         "soldCount": 6,
         "halalVerified": true,
-        "createdAt": "2026-11-25T07:55:46.290Z"
+        "createdAt": "2026-11-25T08:21:43.844Z"
       },
       {
         "id": "mkt-grain-lot",
@@ -315,7 +315,7 @@
         "stock": 44,
         "soldCount": 19,
         "halalVerified": true,
-        "createdAt": "2026-11-25T08:07:46.290Z"
+        "createdAt": "2026-11-25T08:33:43.844Z"
       },
       {
         "id": "mkt-cold-logistics",
@@ -329,7 +329,7 @@
         "stock": 30,
         "soldCount": 11,
         "halalVerified": true,
-        "createdAt": "2026-11-25T08:21:46.290Z"
+        "createdAt": "2026-11-25T08:47:43.844Z"
       },
       {
         "id": "mkt-mudarabah-bakery",
@@ -343,10 +343,28 @@
         "stock": 12,
         "soldCount": 4,
         "halalVerified": true,
-        "createdAt": "2026-11-25T08:30:46.290Z"
+        "createdAt": "2026-11-25T08:56:43.844Z"
       }
     ],
-    "marketplaceOrders": []
+    "marketplaceOrders": [],
+    "scpBlocks": [
+      {
+        "height": 1042,
+        "hash": "452029b2976f637a78fdd2ddee932462e6b066784a28feaa6a9927d23cf72d6b",
+        "previousHash": "5c1ad7d7e3357008389f54c067456211a5c0cf80ea7996e0627a7d4c8a4551a3",
+        "txIds": [
+          "tx-nvc-001",
+          "tx-nvc-002"
+        ],
+        "txCount": 2,
+        "totalNvc": 25.286624,
+        "totalMicronNova": 25286624,
+        "quorum": "3/3 SCP Validators",
+        "energyWh": 0.04,
+        "sealedAt": "2026-11-25T09:01:43.844Z"
+      }
+    ],
+    "mudarabahDistributedNvc": 14.2
   },
   "hyperMind": {
     "threatsBlocked": 12847,
@@ -419,21 +437,21 @@
         "module": "Anti-Whale HyperGuard",
         "decision": "Blocked Whale Attack — Wallet 0xWHALE-X tried to accumulate 15,000,000 NVC (>0.01% supply cap).",
         "severity": "blocked",
-        "timestamp": "2026-11-25T08:33:46.290Z"
+        "timestamp": "2026-11-25T08:59:43.844Z"
       },
       {
         "id": "hml-seed-2",
         "module": "Anti-Scam HyperScanner",
         "decision": "Blocked Scam App — 'Double Your Money 1000x' detected; creator permanently banned.",
         "severity": "blocked",
-        "timestamp": "2026-11-25T08:38:46.290Z"
+        "timestamp": "2026-11-25T09:04:43.844Z"
       },
       {
         "id": "hml-seed-3",
         "module": "Self-Healing Network AI",
         "decision": "Oracle Self-Healed — Node ORACLE-EU-01 restored to $3.14 Nova Peg in 0.4s.",
         "severity": "healed",
-        "timestamp": "2026-11-25T08:42:46.290Z"
+        "timestamp": "2026-11-25T09:08:43.844Z"
       }
     ]
   }

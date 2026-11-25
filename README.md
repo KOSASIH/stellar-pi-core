@@ -71,6 +71,8 @@ Stellar Nova Core is governed by **NovaHyperMind** (`server/hypermind.ts`), a ce
 - `GET /api/collateral/proof` — Audited 1.5x real-economy Halal reserve proof breakdown
 - `POST /api/marketplace/listings` — Publish a compliance-screened Real-Economy or Halal Mudarabah NVC listing
 - `POST /api/marketplace/buy` — Settle a marketplace item using a verified 1-KYC Citizen NVC wallet
+- `POST /api/marketplace/mudarabah/distribute` — Distribute 0%-interest Halal Mudarabah real operating surplus across Citizen partners
+- `POST /api/scp/seal` — Seal pending accepted transactions into the next Stellar Consensus Protocol (SCP) block
 - `GET /api/audit/verify` — Cryptographically verify all SHA-256 audit log entries
 - `POST /api/ecosystem/reset` — Reset persisted disk state (`.nova-data/ecosystem-state.json`) cleanly to baseline
 - `POST /api/governance/audit` — Run `MainnetGovernor` ecosystem compliance audit

@@ -532,7 +532,15 @@ export class NovaHyperMind {
     const driftedNodes = oracleNodes.filter((n) => !isValidNovaValue(n.reportedValueUsd));
     if (simulate || driftedNodes.length >= 2) {
       this.bumpModule('oracle-shield');
-      this.selfHeal(oracleNodes);
+      const now = new Date().toISOString();
+      for (const node of oracleNodes) {
+        if (!isValidNovaValue(node.reportedValueUsd) || node.status === 'flagged') {
+          node.reportedValueUsd = NovaPolicy.fixedValueUsd;
+          node.status = 'verified';
+          node.lastCheckedAt = now;
+        }
+      }
+      this.networkHealth = 99.99;
       const attackLabel =
         simulate
           ? 'Coordinated 2-Node Oracle Collusion ($3.20 Drift) + Flash-Speculation Probe'
