@@ -14,9 +14,37 @@ export const PiPolicy = {
   noGambling: 'Strictly Enforced',
   ethicalAi: 'AHI AI Active',
   founderAccountability: 'Community Governed',
+  noRiba: 'Strictly Forbidden - Zero Interest',
+  ribaPolicy: '0% Interest - No Lending With Interest - No Staking Yield - No APY',
+  shariaCompliant: 'Halal - Riba-Free - Gharar-Free',
   allowedSources: ['mining', 'contribution_rewards', 'p2p', 'marketplace', 'app'] as const,
   blacklistedSources: ['exchange', 'bought'] as const,
   gamblingKeywords: ['casino', 'gambling', 'betting', 'jackpot', 'slot', 'poker', 'lottery'] as const,
+  ribaKeywords: [
+    'interest',
+    'riba',
+    'apy',
+    'apr',
+    'yield',
+    'staking reward',
+    'lending interest',
+    'loan interest',
+    'fixed return',
+    'profit sharing interest',
+    'deposit interest',
+    'borrow interest',
+    'leverage',
+    'margin interest',
+    'bunga',
+    'rentenir',
+  ] as const,
+  bannedFinancialModels: [
+    'lending_with_interest',
+    'staking_apy',
+    'yield_farming',
+    'leveraged_trading',
+    'interest_bearing_savings',
+  ] as const,
 } as const;
 
 export const PI_CONSTANTS = PiPolicy;
@@ -44,6 +72,7 @@ export interface PiTransaction {
   reportedValueUsd: number;
   status: 'accepted' | 'rejected';
   reason: string;
+  ribaRejected?: boolean;
   purityScore: number;
   hash: string;
   timestamp: string;
@@ -74,6 +103,8 @@ export interface GovernanceRules {
   founderAccountability: string;
   volatileRejection: string;
   noGambling: string;
+  noRiba: string;
+  shariaCompliant: string;
   evolutionThreshold: number;
 }
 
@@ -93,6 +124,8 @@ export interface EcosystemSnapshot {
   complianceBreached: boolean;
   aiHealthScore: number;
   unethicalIncidents: number;
+  ribaBlockedTransactions: number;
+  ribaPolicy: string;
   rules: GovernanceRules;
   metrics: {
     totalTransactions: number;

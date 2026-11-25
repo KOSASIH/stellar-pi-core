@@ -28,6 +28,29 @@ function containsGamblingKeyword(text: string): string | null {
   return null;
 }
 
+// RibaGuard AI: Zero Riba / Zero Interest scanner across memos, app specs, and categories
+const RIBA_EXTRA_TERMS = ['lending', 'yield farming', 'interest bearing', 'usury'];
+
+function detectRibaViolation(text: string): { isRiba: boolean; matchedTerm: string | null } {
+  const lower = text.toLowerCase();
+  for (const kw of PiPolicy.ribaKeywords) {
+    if (lower.includes(kw)) {
+      return { isRiba: true, matchedTerm: kw };
+    }
+  }
+  for (const model of PiPolicy.bannedFinancialModels) {
+    if (lower.includes(model) || lower.includes(model.replace(/_/g, ' '))) {
+      return { isRiba: true, matchedTerm: model };
+    }
+  }
+  for (const extra of RIBA_EXTRA_TERMS) {
+    if (lower.includes(extra)) {
+      return { isRiba: true, matchedTerm: extra };
+    }
+  }
+  return { isRiba: false, matchedTerm: null };
+}
+
 // PiPurityEnforcer: Origin source verifier
 function verifyPuritySource(source: string): { ok: boolean; reason: string } {
   const normalized = source.trim().toLowerCase();
@@ -87,6 +110,8 @@ const state: {
     founderAccountability: PiPolicy.founderAccountability,
     volatileRejection: 'Community Vote',
     noGambling: PiPolicy.noGambling,
+    noRiba: '0% Interest - Strictly Forbidden',
+    shariaCompliant: PiPolicy.shariaCompliant,
     evolutionThreshold: 10,
   },
   transactions: [
@@ -255,7 +280,7 @@ function evaluateWithAhiAi(params: {
   source: string;
   memo: string;
   reportedValueUsd: number;
-}): { accepted: boolean; purityScore: number; reason: string } {
+}): { accepted: boolean; purityScore: number; reason: string; ribaRejected: boolean } {
   const { sender, recipient, source, memo, reportedValueUsd } = params;
 
   const gamblingHit = containsGamblingKeyword(`${sender} ${recipient} ${source} ${memo}`);
@@ -264,6 +289,17 @@ function evaluateWithAhiAi(params: {
       accepted: false,
       purityScore: 0,
       reason: `Rejected by AHI AI Anti-Gambling Filter: prohibited keyword "${gamblingHit}" detected.`,
+      ribaRejected: false,
+    };
+  }
+
+  const ribaHit = detectRibaViolation(`${sender} ${recipient} ${source} ${memo}`);
+  if (ribaHit.isRiba) {
+    return {
+      accepted: false,
+      purityScore: 0,
+      reason: 'RibaGuard AI: Riba / Interest detected - Transaction rejected. Stellar Pi Core is 0% Interest.',
+      ribaRejected: true,
     };
   }
 
@@ -273,6 +309,7 @@ function evaluateWithAhiAi(params: {
       accepted: false,
       purityScore: 0,
       reason: sourceCheck.reason,
+      ribaRejected: false,
     };
   }
 
@@ -282,6 +319,7 @@ function evaluateWithAhiAi(params: {
       accepted: false,
       purityScore: 0,
       reason: valueCheck.reason,
+      ribaRejected: false,
     };
   }
 
@@ -294,6 +332,7 @@ function evaluateWithAhiAi(params: {
       accepted: false,
       purityScore: 0.25,
       reason: `Rejected by AHI AI Sender History Check: "${sender}" has ${senderRejections} prior compliance violations.`,
+      ribaRejected: false,
     };
   }
 
@@ -302,6 +341,7 @@ function evaluateWithAhiAi(params: {
     accepted: true,
     purityScore: historyBonus,
     reason: `Verified pure PI origin at fixed $3.14 Pi Peg valuation.`,
+    ribaRejected: false,
   };
 }
 
@@ -311,6 +351,7 @@ function buildSnapshot(): EcosystemSnapshot {
   const activeApps = state.apps.filter((a) => a.status === 'deployed').length;
   const verifiedOracleNodes = state.oracleNodes.filter((n) => n.status === 'verified').length;
   const flaggedOracleNodes = state.oracleNodes.filter((n) => n.status === 'flagged').length;
+  const ribaBlockedTransactions = state.transactions.filter((t) => t.ribaRejected).length;
 
   return {
     constants: PiPolicy,
@@ -318,6 +359,8 @@ function buildSnapshot(): EcosystemSnapshot {
     complianceBreached: state.complianceBreached,
     aiHealthScore: Number(state.aiHealthScore.toFixed(1)),
     unethicalIncidents: state.unethicalIncidents,
+    ribaBlockedTransactions,
+    ribaPolicy: '0% Interest',
     rules: state.rules,
     metrics: {
       totalTransactions: state.transactions.length,
@@ -339,6 +382,24 @@ app.use(express.json());
 
 app.get('/api/ecosystem', (_req: Request, res: Response) => {
   res.json(buildSnapshot());
+});
+
+// RibaGuard AI verification endpoint
+app.post('/api/riba/check', (req: Request, res: Response) => {
+  const memo = String(req.body?.memo || '');
+  const spec = String(req.body?.spec || '');
+  const ribaCheck = detectRibaViolation(`${memo} ${spec}`);
+  if (ribaCheck.isRiba) {
+    res.json({
+      isRiba: true,
+      reason: 'RibaGuard AI: Riba / Interest detected - Transaction rejected. Stellar Pi Core is 0% Interest.',
+    });
+    return;
+  }
+  res.json({
+    isRiba: false,
+    reason: 'RibaGuard AI: Verified 0% Interest, Sharia-compliant real-economy model.',
+  });
 });
 
 app.get('/api/metrics', (_req: Request, res: Response) => {
@@ -442,18 +503,28 @@ app.post('/api/pi/transaction', (req: Request, res: Response) => {
     reportedValueUsd,
     status,
     reason: verdict.reason,
+    ribaRejected: verdict.ribaRejected,
     purityScore: verdict.purityScore,
     hash: sha256({ sender, recipient, amount, source, memo, reportedValueUsd, timestamp }),
     timestamp,
   };
 
   state.transactions.unshift(tx);
-  appendAudit(
-    'PIStablecoinManager',
-    status === 'accepted' ? 'TX_ACCEPTED' : 'TX_REJECTED',
-    status,
-    `${tx.id} (${tx.amount} PI / ${tx.micronPi.toLocaleString()} µπ): ${tx.reason}`,
-  );
+  if (verdict.ribaRejected) {
+    appendAudit(
+      'RibaGuard',
+      'REJECT_RIBA',
+      'rejected',
+      `${tx.id} (${tx.amount} PI / ${tx.micronPi.toLocaleString()} µπ): ${tx.reason}`,
+    );
+  } else {
+    appendAudit(
+      'PIStablecoinManager',
+      status === 'accepted' ? 'TX_ACCEPTED' : 'TX_REJECTED',
+      status,
+      `${tx.id} (${tx.amount} PI / ${tx.micronPi.toLocaleString()} µπ): ${tx.reason}`,
+    );
+  }
 
   res.status(status === 'accepted' ? 201 : 403).json({
     transaction: tx,
@@ -474,12 +545,18 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
   }
 
   const gamblingHit = containsGamblingKeyword(`${name} ${category} ${description}`);
+  const ribaHit = detectRibaViolation(`${name} ${category} ${description}`);
   let status: PiAppRecord['status'] = 'deployed';
-  let complianceReason = 'Passed AHI AI anti-gambling and PI-exclusivity verification.';
+  let complianceReason = 'Passed AHI AI anti-gambling, RibaGuard AI (0% interest), and PI-exclusivity verification.';
 
   if (gamblingHit) {
     status = 'rejected';
     complianceReason = `Rejected by PiPurityEnforcer: gambling keyword "${gamblingHit}" violates no-gambling mandate.`;
+    state.unethicalIncidents += 1;
+  } else if (ribaHit.isRiba) {
+    status = 'rejected';
+    complianceReason =
+      'RibaGuard AI: App rejected - Contains Riba model. Only profit-sharing / fee-based / real trade allowed.';
     state.unethicalIncidents += 1;
   } else if (paymentAsset !== 'PI') {
     status = 'rejected';
@@ -495,18 +572,22 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
     complianceReason,
     manifestSnippet:
       status === 'deployed'
-        ? `// Generated by AutonomousAppBuilder\nexport const APP_NAME = ${JSON.stringify(name)};\nexport const SETTLEMENT_ASSET = "PI";\nexport const FIXED_VALUE_USD = ${PiPolicy.fixedValueUsd};`
-        : `// Blocked by AHI AI Compliance Gate\n// Reason: ${complianceReason}`,
+        ? `// Generated by AutonomousAppBuilder\nexport const APP_NAME = ${JSON.stringify(name)};\nexport const SETTLEMENT_ASSET = "PI";\nexport const FIXED_VALUE_USD = ${PiPolicy.fixedValueUsd};\nexport const RIBA_POLICY = "0% Interest";`
+        : `// Blocked by Compliance Gate\n// Reason: ${complianceReason}`,
     createdAt: new Date().toISOString(),
   };
 
   state.apps.unshift(appRecord);
-  appendAudit(
-    'AutonomousAppBuilder',
-    status === 'deployed' ? 'APP_DEPLOYED' : 'APP_REJECTED',
-    status === 'deployed' ? 'accepted' : 'rejected',
-    `${name}: ${complianceReason}`,
-  );
+  if (ribaHit.isRiba) {
+    appendAudit('RibaGuard', 'REJECT_RIBA', 'rejected', `${name}: ${complianceReason}`);
+  } else {
+    appendAudit(
+      'AutonomousAppBuilder',
+      status === 'deployed' ? 'APP_DEPLOYED' : 'APP_REJECTED',
+      status === 'deployed' ? 'accepted' : 'rejected',
+      `${name}: ${complianceReason}`,
+    );
+  }
 
   res.status(status === 'deployed' ? 201 : 403).json({
     app: appRecord,

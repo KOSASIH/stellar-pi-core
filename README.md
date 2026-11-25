@@ -28,23 +28,29 @@ Code alone does not create an unassailable monetary network. Stellar Pi Core is 
 4. **Moat 4 — Fair Distribution**: 1 Person = 1 Account. Whales cannot buy dominance.
 5. **Moat 5 — AHI AI**: AI trained on real Pioneer transaction data. No data, no AI.
 
+### Moat 6 - Riba-Free: The Ethical Moat
+
+Stellar Pi Core is 0% Interest. No APY, no lending interest, no yield farming. This makes it trusted by 2 Billion Muslims and all ethical users worldwide. Competitors cannot copy this without destroying their own profit model based on interest.
+
 ---
 
 ## Architecture & Modules
 
-- **Shared Policy (`shared/piPolicy.ts`)**: Defines `PiPolicy` constants (`fixedValueUsd: 3.14`, `totalSupply: 100000000000`, `collateralRatio: 1.5`, `micronPiPerPi: 1000000`, allowed/blacklisted sources, gambling keywords) and `formatMicronPi` / `formatUsd` helpers.
+- **Shared Policy (`shared/piPolicy.ts`)**: Defines `PiPolicy` constants (`fixedValueUsd: 3.14`, `totalSupply: 100000000000`, `collateralRatio: 1.5`, `micronPiPerPi: 1000000`, `noRiba`, `ribaPolicy`, `shariaCompliant`, `ribaKeywords`, `bannedFinancialModels`, allowed/blacklisted sources, gambling keywords) and `formatMicronPi` / `formatUsd` helpers.
 - **PiValuePolicy (`server.ts`)**: Accepts `reportedValueUsd === 3.14`; deviations are flagged for community vote via democratic governance rather than arbitrary instant bans.
 - **PiPurityEnforcer (`server.ts`)**: Rejects blacklisted sources (`exchange`, `bought`), gambling keywords (`casino`, `gambling`, `betting`, `jackpot`, `slot`, `poker`, `lottery`), and non-`PI` settlement assets.
+- **RibaGuard AI (`server.ts`)**: Scans transaction memos, app specifications, and categories for Riba / interest / APY / yield farming models and enforces 0% interest across the ecosystem.
 - **AHI AI Filter (`server.ts`)**: Evaluates every transaction across origin source, memo compliance, peg identity, and sender history while maintaining `aiHealthScore`.
 - **Global PI Oracle & MainnetGovernor (`server.ts`)**: Tracks regional oracle nodes (`Asia-Pacific`, `Europe`, `North America`), flags deviations for community vote, audits ecosystem readiness, and gates Mainnet launch.
-- **Ecosystem Console (`client/src/App.tsx`)**: React + TypeScript + Tailwind CSS dashboard featuring four live KPI cards, Stablecoin & AHI AI Filter, Autonomous App Builder, Oracle & Mainnet Governor, and SHA-256 Immutable Audit Trail.
+- **Ecosystem Console (`client/src/App.tsx`)**: React + TypeScript + Tailwind CSS dashboard featuring five live KPI cards, Stablecoin & AHI AI Filter, Autonomous App Builder, Oracle & Mainnet Governor, and SHA-256 Immutable Audit Trail.
 
 ---
 
 ## API Endpoints
 
-- `GET /api/ecosystem` — Full ecosystem snapshot (constants, metrics, transactions, apps, oracle nodes, audit log)
-- `POST /api/pi/transaction` — Submit and validate a PI transaction through AHI AI, `PiValuePolicy`, and `PiPurityEnforcer`
+- `GET /api/ecosystem` — Full ecosystem snapshot (constants, metrics, `ribaBlockedTransactions`, `ribaPolicy`, transactions, apps, oracle nodes, audit log)
+- `POST /api/riba/check` — RibaGuard AI check for `{ memo, spec }` returning `{ isRiba, reason }`
+- `POST /api/pi/transaction` — Submit and validate a PI transaction through AHI AI, `RibaGuard AI`, `PiValuePolicy`, and `PiPurityEnforcer`
 - `POST /api/apps/generate` — Generate and deploy a PI-exclusive, gambling-free internal app
 - `POST /api/apps/:id/halt` — Halt or resume a deployed ecosystem app
 - `POST /api/oracle/verify` — Verify or simulate value deviation on a regional oracle node

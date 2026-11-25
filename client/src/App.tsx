@@ -208,7 +208,7 @@ export default function App() {
                 Stellar Pi Core — Ecosystem Console
               </h1>
               <p className="text-xs text-slate-400">
-                Stablecoin-Only · Fixed Value {formatUsd(constants.fixedValueUsd)} · Gambling-Free Mandate · {constants.tagline}
+                Stablecoin-Only · Fixed Value {formatUsd(constants.fixedValueUsd)} · Gambling-Free · RIBA-FREE · 0% Interest
               </p>
             </div>
           </div>
@@ -260,8 +260,8 @@ export default function App() {
           </div>
         )}
 
-        {/* 4 Metric Cards */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 5 Metric Cards */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Fixed PI Peg</span>
@@ -314,6 +314,19 @@ export default function App() {
             </div>
             <p className="mt-1 text-xs text-slate-400">
               {metrics.verifiedOracleNodes} verified · {metrics.isolatedOracleNodes} flagged nodes
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>RibaGuard AI: 0% Interest</span>
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
+              {snapshot.ribaBlockedTransactions} blocked
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Halal - No Interest - No APY
             </p>
           </div>
         </section>
@@ -480,6 +493,17 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    setSource('p2p');
+                    setReportedValueUsd('3.14');
+                    setMemo('Lending 100 PI with 10% interest APY');
+                  }}
+                  className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300"
+                >
+                  Test Riba Rejection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     setSource('mining');
                     setReportedValueUsd('3.14');
                     setMemo('Node mining reward settlement');
@@ -488,6 +512,11 @@ export default function App() {
                 >
                   Reset Valid Preset
                 </button>
+              </div>
+
+              <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-300 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>RibaGuard AI Active - 0% Interest Enforced</span>
               </div>
             </form>
 
@@ -572,6 +601,9 @@ export default function App() {
                 <p className="text-xs text-slate-400 mt-0.5">
                   Generates PI-exclusive internal applications. Gambling and non-PI assets are strictly blocked.
                 </p>
+                <p className="text-xs text-amber-300/90 mt-1.5">
+                  Forbidden: Lending with interest, Staking APY, Yield Farming, Leverage
+                </p>
               </div>
 
               <label className="block text-xs text-slate-300 space-y-1">
@@ -627,13 +659,26 @@ export default function App() {
                 />
               </label>
 
-              <button
-                type="submit"
-                disabled={submittingApp}
-                className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50"
-              >
-                {submittingApp ? 'Auditing & Building...' : 'Generate & Deploy PI App'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={submittingApp}
+                  className="flex-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm px-4 py-2.5 disabled:opacity-50"
+                >
+                  {submittingApp ? 'Auditing & Building...' : 'Generate & Deploy PI App'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppName('Pi Lending APY');
+                    setAppDescription('Lending Pi with 12% APY interest');
+                    setPaymentAsset('PI');
+                  }}
+                  className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium px-3 py-2.5"
+                >
+                  Test Riba App
+                </button>
+              </div>
             </form>
 
             <div className="lg:col-span-7 space-y-3">
@@ -768,6 +813,16 @@ export default function App() {
                   <dt className="text-slate-400">Founder Policy</dt>
                   <dd className="mt-1 font-medium text-white">
                     {snapshot.rules.founderAccountability}
+                  </dd>
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
+                  <dt className="text-slate-400">No Riba</dt>
+                  <dd className="mt-1 font-medium text-emerald-300">{snapshot.rules.noRiba}</dd>
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-slate-800 p-3">
+                  <dt className="text-slate-400">Sharia Compliant</dt>
+                  <dd className="mt-1 font-medium text-emerald-300">
+                    {snapshot.rules.shariaCompliant}
                   </dd>
                 </div>
               </dl>
