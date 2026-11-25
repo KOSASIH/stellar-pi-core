@@ -14,7 +14,13 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
-import type { EcosystemSnapshot, PiAppRecord, PiTransaction } from '../../shared/piPolicy.ts';
+import {
+  formatMicronPi,
+  formatUsd,
+  type EcosystemSnapshot,
+  type PiAppRecord,
+  type PiTransaction,
+} from '../../shared/piPolicy.ts';
 
 type TabId = 'transactions' | 'apps' | 'oracle' | 'audit';
 
@@ -80,7 +86,10 @@ export default function App() {
       const data = await res.json();
       if (data.snapshot) setSnapshot(data.snapshot);
       if (res.ok) {
-        setFeedback({ kind: 'success', text: `Transaction ${data.transaction.id} accepted by AHI AI.` });
+        setFeedback({
+          kind: 'success',
+          text: `Transaction ${data.transaction.id} (${data.transaction.amount} PI · ${formatMicronPi(data.transaction.amount)}) accepted by AHI AI.`,
+        });
       } else {
         setFeedback({
           kind: 'error',
@@ -148,7 +157,7 @@ export default function App() {
       text:
         value === 3.14
           ? `Oracle ${nodeId} confirmed $3.14 Pi Peg valuation.`
-          : `Oracle ${nodeId} deviated ($${value.toLocaleString()}) and was flagged for community vote.`,
+          : `Oracle ${nodeId} deviated (${formatUsd(value)}) and was flagged for community vote.`,
     });
   }
 
@@ -161,7 +170,7 @@ export default function App() {
       kind: data.compliant ? 'success' : 'error',
       text: data.compliant
         ? 'MainnetGovernor audit passed across all ecosystem components.'
-        : 'MainnetGovernor audit flagged isolated oracle nodes.',
+        : 'MainnetGovernor audit flagged oracle nodes requiring community vote.',
     });
   }
 
@@ -199,7 +208,7 @@ export default function App() {
                 Stellar Pi Core — Ecosystem Console
               </h1>
               <p className="text-xs text-slate-400">
-                Stablecoin-Only · Fixed Value ${constants.fixedValueUsd.toLocaleString()} · Gambling-Free Mandate
+                Stablecoin-Only · Fixed Value {formatUsd(constants.fixedValueUsd)} · Gambling-Free Mandate · {constants.tagline}
               </p>
             </div>
           </div>
@@ -217,7 +226,7 @@ export default function App() {
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
-              1 PI = ${constants.fixedValueUsd.toLocaleString()}
+              1 PI = {formatUsd(constants.fixedValueUsd)}
             </span>
           </div>
         </div>
@@ -251,22 +260,22 @@ export default function App() {
           </div>
         )}
 
-        {/* Key Policy & Ecosystem Metrics */}
+        {/* 4 Metric Cards */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Fixed PI Peg</span>
               <Scale className="w-4 h-4 text-amber-400" />
             </div>
             <div className="mt-2 text-2xl font-semibold tabular-nums text-white">
-              ${constants.fixedValueUsd.toLocaleString()}
+              {formatUsd(constants.fixedValueUsd)}
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              Supply: {(constants.totalSupply / 1e9).toFixed(0)}B PI · {constants.collateralRatio}x Collateral
+              Supply: {(constants.totalSupply / 1e9).toFixed(0)}B PI · {constants.collateralRatio}x Collateral · $314B Peg Cap
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>PI Purity & Filter</span>
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -282,7 +291,7 @@ export default function App() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>PI-Exclusive Apps</span>
               <AppWindow className="w-4 h-4 text-sky-400" />
@@ -295,7 +304,7 @@ export default function App() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Oracle & AHI AI Health</span>
               <Activity className="w-4 h-4 text-emerald-400" />
@@ -304,7 +313,7 @@ export default function App() {
               {snapshot.aiHealthScore}%
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              {metrics.verifiedOracleNodes} verified · {metrics.isolatedOracleNodes} isolated
+              {metrics.verifiedOracleNodes} verified · {metrics.isolatedOracleNodes} flagged nodes
             </p>
           </div>
         </section>
@@ -339,19 +348,19 @@ export default function App() {
           })}
         </nav>
 
-        {/* TAB 1: Transactions & AHI AI Filter */}
+        {/* TAB 1: Stablecoin & AHI AI Filter */}
         {activeTab === 'transactions' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <form
               onSubmit={handleTransactionSubmit}
-              className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4 h-fit"
+              className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
             >
               <div>
                 <h2 className="text-base font-semibold text-white">
                   Submit PI Stablecoin Transaction
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Screened in real time by AHI AI, PiValuePolicy, and PiPurityEnforcer.
+                  Screened in real time by AHI AI, PiValuePolicy, and PiPurityEnforcer. 1 PI = {constants.micronPiPerPi.toLocaleString()} Micron Pi.
                 </p>
               </div>
 
@@ -383,13 +392,18 @@ export default function App() {
                   <span>Amount (PI)</span>
                   <input
                     type="number"
-                    min="0.001"
+                    min="0.000001"
                     step="any"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
                     required
                   />
+                  {Number.isFinite(Number(amount)) && Number(amount) > 0 && (
+                    <span className="block text-[11px] text-amber-300/90 tabular-nums">
+                      = {formatMicronPi(Number(amount))}
+                    </span>
+                  )}
                 </label>
                 <label className="block text-xs text-slate-300 space-y-1">
                   <span>Coin Origin Source</span>
@@ -477,11 +491,11 @@ export default function App() {
               </div>
             </form>
 
-            <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+            <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-white">Ledger & Filter Verdicts</h2>
                 <span className="text-xs text-slate-400">
-                  {snapshot.transactions.length} recorded
+                  {snapshot.transactions.length} recorded · SCP Consensus
                 </span>
               </div>
 
@@ -506,10 +520,26 @@ export default function App() {
                         <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
                           {tx.source}
                         </span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            tx.status === 'accepted'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : 'bg-rose-500/15 text-rose-300'
+                          }`}
+                        >
+                          {tx.status}
+                        </span>
                       </div>
-                      <span className="font-semibold text-sm tabular-nums text-white">
-                        {tx.amount} PI (${(tx.amount * tx.reportedValueUsd).toLocaleString()})
-                      </span>
+                      <div className="text-right tabular-nums">
+                        <span className="font-semibold text-sm text-white">
+                          {tx.amount} PI ({formatUsd(tx.amount * tx.reportedValueUsd)})
+                        </span>
+                        {tx.amount < 1 && (
+                          <span className="block text-[11px] text-amber-300">
+                            {formatMicronPi(tx.amount)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="mt-1.5 text-xs text-slate-300">
                       {tx.sender} → {tx.recipient} · {tx.memo}
@@ -533,7 +563,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <form
               onSubmit={handleAppSubmit}
-              className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4 h-fit"
+              className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit"
             >
               <div>
                 <h2 className="text-base font-semibold text-white">
@@ -610,7 +640,7 @@ export default function App() {
               {snapshot.apps.map((app) => (
                 <div
                   key={app.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-2.5"
+                  className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2.5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -655,7 +685,7 @@ export default function App() {
         {/* TAB 3: Global Oracle & Mainnet Governor */}
         {activeTab === 'oracle' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+            <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-white">
                   Global PI Oracle Compliance Verifier
@@ -685,8 +715,8 @@ export default function App() {
                         </span>
                       </div>
                       <p className="text-sm text-white mt-1">{node.region}</p>
-                      <p className="text-xs text-slate-400">
-                        Reported: ${node.reportedValueUsd.toLocaleString()}
+                      <p className="text-xs text-slate-400 tabular-nums">
+                        Reported: {formatUsd(node.reportedValueUsd)}
                       </p>
                     </div>
 
@@ -711,7 +741,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4 h-fit">
+            <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4 h-fit">
               <div>
                 <h2 className="text-base font-semibold text-white">
                   Mainnet Governor & Ethical Rules
@@ -774,7 +804,7 @@ export default function App() {
 
         {/* TAB 4: Immutable Audit Trail */}
         {activeTab === 'audit' && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-white">
                 SHA-256 Audit Trail Logger

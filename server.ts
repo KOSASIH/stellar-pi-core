@@ -4,7 +4,7 @@ import path from 'node:path';
 import express from 'express';
 import type { Request, Response } from 'express';
 import {
-  PI_CONSTANTS,
+  PiPolicy,
   type AuditEntry,
   type EcosystemSnapshot,
   type GovernanceRules,
@@ -17,9 +17,10 @@ function sha256(payload: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
+// PiPurityEnforcer: Gambling keyword detector
 function containsGamblingKeyword(text: string): string | null {
   const lower = text.toLowerCase();
-  for (const kw of PI_CONSTANTS.gamblingKeywords) {
+  for (const kw of PiPolicy.gamblingKeywords) {
     if (lower.includes(kw)) {
       return kw;
     }
@@ -27,30 +28,44 @@ function containsGamblingKeyword(text: string): string | null {
   return null;
 }
 
-function isSourceCompliant(source: string): { ok: boolean; reason: string } {
+// PiPurityEnforcer: Origin source verifier
+function verifyPuritySource(source: string): { ok: boolean; reason: string } {
   const normalized = source.trim().toLowerCase();
   if (!normalized) {
     return { ok: false, reason: 'Missing PI coin origin source.' };
   }
-  for (const blocked of PI_CONSTANTS.blacklistedSources) {
+  for (const blocked of PiPolicy.blacklistedSources) {
     if (normalized === blocked || normalized.includes(blocked)) {
       return {
         ok: false,
-        reason: `Rejected tainted/exchange source "${source}" by PiPurityAccountabilityEnforcer.`,
+        reason: `Rejected tainted/exchange source "${source}" by PiPurityEnforcer.`,
       };
     }
   }
-  const allowed = PI_CONSTANTS.allowedSources.some((s) => s === normalized);
+  const allowed = PiPolicy.allowedSources.some((s) => s === normalized);
   if (!allowed) {
     return {
       ok: false,
-      reason: `Source "${source}" is not in allowed origins (${PI_CONSTANTS.allowedSources.join(', ')}).`,
+      reason: `Source "${source}" is not in allowed origins (${PiPolicy.allowedSources.join(', ')}).`,
     };
   }
   return { ok: true, reason: 'Verified pure PI origin.' };
 }
 
-// In-memory state replicating PiStablecoinManager, AHI AI, AppBuilder, Oracle, and MainnetGovernor
+// PiValuePolicy: Mathematical identity check ($3.14 USD)
+function verifyPiValuePeg(reportedValueUsd: number): { ok: boolean; reason: string } {
+  if (Math.abs(reportedValueUsd - PiPolicy.fixedValueUsd) > 1e-9) {
+    return {
+      ok: false,
+      reason: `PiValuePolicy: reported value $${reportedValueUsd.toFixed(2)} deviates from $3.14 Pi Peg and was flagged for community vote.`,
+    };
+  }
+  return { ok: true, reason: 'Verified $3.14 Pi Peg mathematical identity.' };
+}
+
+const nowMs = Date.now();
+
+// In-memory state with realistic seed data: 3 oracle nodes, 3 apps, 3 transactions, 5 audit logs
 const state: {
   mainnetLaunched: boolean;
   complianceBreached: boolean;
@@ -67,11 +82,11 @@ const state: {
   aiHealthScore: 99.4,
   unethicalIncidents: 0,
   rules: {
-    piExclusivity: 'mandatory',
-    ethicalAi: 'bias_free',
-    founderAccountability: 'zero_tolerance',
-    volatileRejection: 'auto_halt',
-    noGambling: 'eternal_ban',
+    piExclusivity: PiPolicy.piExclusivity,
+    ethicalAi: PiPolicy.ethicalAi,
+    founderAccountability: PiPolicy.founderAccountability,
+    volatileRejection: 'Community Vote',
+    noGambling: PiPolicy.noGambling,
     evolutionThreshold: 10,
   },
   transactions: [
@@ -80,42 +95,45 @@ const state: {
       sender: 'PI-NODE-MINER-01',
       recipient: 'PI-MERCHANT-HUB-07',
       amount: 12.5,
+      micronPi: 12_500_000,
       source: 'mining',
-      memo: 'Hardware node mining settlement',
-      reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
+      memo: 'Mobile Pioneer KYC mining settlement',
+      reportedValueUsd: PiPolicy.fixedValueUsd,
       status: 'accepted',
-      reason: 'Verified pure PI origin at fixed $3.14 valuation.',
+      reason: 'Verified pure PI origin at fixed $3.14 Pi Peg valuation.',
       purityScore: 1.0,
       hash: sha256({ id: 'tx-pi-001', amount: 12.5, source: 'mining' }),
-      timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+      timestamp: new Date(nowMs - 1000 * 60 * 18).toISOString(),
     },
     {
       id: 'tx-pi-002',
       sender: 'PI-CONTRIBUTOR-44',
       recipient: 'PI-OPEN-MARKET-02',
-      amount: 4,
+      amount: 0.286624,
+      micronPi: 286_624,
       source: 'contribution_rewards',
-      memo: 'Ecosystem code contribution reward',
-      reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
+      memo: 'Micro-payment for SCP node uptime contribution',
+      reportedValueUsd: PiPolicy.fixedValueUsd,
       status: 'accepted',
-      reason: 'Verified pure PI origin at fixed $3.14 valuation.',
+      reason: 'Verified pure PI origin at fixed $3.14 Pi Peg valuation.',
       purityScore: 1.0,
-      hash: sha256({ id: 'tx-pi-002', amount: 4, source: 'contribution_rewards' }),
-      timestamp: new Date(Date.now() - 1000 * 60 * 11).toISOString(),
+      hash: sha256({ id: 'tx-pi-002', amount: 0.286624, source: 'contribution_rewards' }),
+      timestamp: new Date(nowMs - 1000 * 60 * 11).toISOString(),
     },
     {
       id: 'tx-pi-003',
       sender: 'exchange_wallet_1',
       recipient: 'PI-TREASURY-01',
       amount: 250,
+      micronPi: 250_000_000,
       source: 'exchange',
       memo: 'External exchange liquidity bridge',
       reportedValueUsd: 3.12,
       status: 'rejected',
-      reason: 'Rejected tainted/exchange source "exchange" by PiPurityAccountabilityEnforcer.',
+      reason: 'Rejected tainted/exchange source "exchange" by PiPurityEnforcer.',
       purityScore: 0,
       hash: sha256({ id: 'tx-pi-003', amount: 250, source: 'exchange' }),
-      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+      timestamp: new Date(nowMs - 1000 * 60 * 5).toISOString(),
     },
   ],
   apps: [
@@ -123,51 +141,61 @@ const state: {
       id: 'app-pi-marketplace',
       name: 'Pi Civic Marketplace',
       category: 'Commerce',
-      description: 'Peer-to-peer local goods exchange settled exclusively in fixed-value PI.',
+      description: 'Peer-to-peer local goods exchange settled exclusively in fixed-value $3.14 PI.',
       status: 'deployed',
       complianceReason: 'Passed AHI AI anti-gambling and PI-exclusivity verification.',
-      manifestSnippet: `// PI-Exclusive Settlement Contract\nconst FIXED_PI_VALUE = ${PI_CONSTANTS.fixedValueUsd};\nassertSourceAllowed(["mining", "rewards", "p2p", "marketplace"]);`,
-      createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+      manifestSnippet: `// PI-Exclusive Settlement Contract\nconst FIXED_PI_VALUE = ${PiPolicy.fixedValueUsd};\nassertSourceAllowed(["mining", "contribution_rewards", "p2p", "marketplace", "app"]);`,
+      createdAt: new Date(nowMs - 1000 * 60 * 45).toISOString(),
     },
     {
       id: 'app-pi-energy-grid',
       name: 'Raspberry Pi Microgrid Ledger',
       category: 'Infrastructure',
-      description: 'Autonomous solar microgrid metering paid with contribution rewards in PI.',
+      description: 'Autonomous solar microgrid metering paid in Micron Pi contribution rewards.',
       status: 'deployed',
       complianceReason: 'Passed AHI AI anti-gambling and PI-exclusivity verification.',
-      manifestSnippet: `// PI-Exclusive IoT Metering\nconst FIXED_PI_VALUE = ${PI_CONSTANTS.fixedValueUsd};\nrequirePurityScore(1.0);`,
-      createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
+      manifestSnippet: `// PI-Exclusive IoT Metering\nconst MICRON_PER_PI = ${PiPolicy.micronPiPerPi};\nrequirePurityScore(1.0);`,
+      createdAt: new Date(nowMs - 1000 * 60 * 25).toISOString(),
+    },
+    {
+      id: 'app-pi-supply-verifier',
+      name: 'Pi Fair Supply Verifier',
+      category: 'Supply Chain',
+      description: 'Transparent provenance tracking with anti-whale 1-KYC Pioneer escrow.',
+      status: 'deployed',
+      complianceReason: 'Passed AHI AI anti-gambling and PI-exclusivity verification.',
+      manifestSnippet: `// SCP Fair Supply Escrow\nconst COLLATERAL_TARGET = ${PiPolicy.collateralRatio};\nassertAntiWhaleKyc(true);`,
+      createdAt: new Date(nowMs - 1000 * 60 * 14).toISOString(),
     },
   ],
   oracleNodes: [
     {
       id: 'oracle-sg-01',
       region: 'Asia-Pacific (SG)',
-      reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
+      reportedValueUsd: PiPolicy.fixedValueUsd,
       status: 'verified',
-      lastCheckedAt: new Date().toISOString(),
+      lastCheckedAt: new Date(nowMs - 1000 * 30).toISOString(),
     },
     {
       id: 'oracle-eu-02',
       region: 'Europe (EU)',
-      reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
+      reportedValueUsd: PiPolicy.fixedValueUsd,
       status: 'verified',
-      lastCheckedAt: new Date().toISOString(),
+      lastCheckedAt: new Date(nowMs - 1000 * 30).toISOString(),
     },
     {
       id: 'oracle-us-03',
       region: 'North America (US)',
-      reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
+      reportedValueUsd: PiPolicy.fixedValueUsd,
       status: 'verified',
-      lastCheckedAt: new Date().toISOString(),
+      lastCheckedAt: new Date(nowMs - 1000 * 30).toISOString(),
     },
   ],
   auditLog: [],
 };
 
-function appendAudit(moduleName: string, action: string, verdict: AuditEntry['verdict'], detail: string) {
-  const timestamp = new Date().toISOString();
+function appendAudit(moduleName: string, action: string, verdict: AuditEntry['verdict'], detail: string, offsetMs = 0) {
+  const timestamp = new Date(Date.now() - offsetMs).toISOString();
   const entry: AuditEntry = {
     id: `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     module: moduleName,
@@ -183,22 +211,109 @@ function appendAudit(moduleName: string, action: string, verdict: AuditEntry['ve
   }
 }
 
+// Seed 5 immutable audit log entries (oldest pushed first so newest sits at index 0)
 appendAudit(
   'UltimateIntegrationCore',
   'BOOT_SEQUENCE',
   'info',
-  'Initialized Stellar Pi Core stablecoin policy ($3.14 fixed valuation, zero-gambling mandate).',
+  'Initialized Stellar Pi Core on SCP low-energy consensus with 100B PI total supply and 1.5x collateral target.',
+  1000 * 60 * 30,
 );
+appendAudit(
+  'PiValuePolicy',
+  'PEG_IDENTITY_LOCK',
+  'accepted',
+  'Locked mathematical peg identity: 1 PI = $3.14 USD (1,000,000 Micron Pi per PI).',
+  1000 * 60 * 24,
+);
+appendAudit(
+  'PiPurityEnforcer',
+  'TX_ACCEPTED',
+  'accepted',
+  'tx-pi-001 & tx-pi-002 verified for pure mining/contribution_rewards origins.',
+  1000 * 60 * 11,
+);
+appendAudit(
+  'AHIAIFilter',
+  'TX_REJECTED',
+  'rejected',
+  'tx-pi-003 rejected: tainted exchange source and $3.12 deviation flagged.',
+  1000 * 60 * 5,
+);
+appendAudit(
+  'GlobalPIOracle',
+  'CONSENSUS_SYNC',
+  'accepted',
+  '3-region oracle quorum (SG, EU, US) verified $3.14 Pi Peg alignment.',
+  1000 * 30,
+);
+
+// AHI AI (Artificial Human Intelligence): real-time transaction scoring across source, memo, value, and sender history
+function evaluateWithAhiAi(params: {
+  sender: string;
+  recipient: string;
+  source: string;
+  memo: string;
+  reportedValueUsd: number;
+}): { accepted: boolean; purityScore: number; reason: string } {
+  const { sender, recipient, source, memo, reportedValueUsd } = params;
+
+  const gamblingHit = containsGamblingKeyword(`${sender} ${recipient} ${source} ${memo}`);
+  if (gamblingHit) {
+    return {
+      accepted: false,
+      purityScore: 0,
+      reason: `Rejected by AHI AI Anti-Gambling Filter: prohibited keyword "${gamblingHit}" detected.`,
+    };
+  }
+
+  const sourceCheck = verifyPuritySource(source);
+  if (!sourceCheck.ok) {
+    return {
+      accepted: false,
+      purityScore: 0,
+      reason: sourceCheck.reason,
+    };
+  }
+
+  const valueCheck = verifyPiValuePeg(reportedValueUsd);
+  if (!valueCheck.ok) {
+    return {
+      accepted: false,
+      purityScore: 0,
+      reason: valueCheck.reason,
+    };
+  }
+
+  // Sender history check (anti-whale / repeat offender scoring)
+  const senderRejections = state.transactions.filter(
+    (t) => t.sender.toLowerCase() === sender.toLowerCase() && t.status === 'rejected',
+  ).length;
+  if (senderRejections >= 3) {
+    return {
+      accepted: false,
+      purityScore: 0.25,
+      reason: `Rejected by AHI AI Sender History Check: "${sender}" has ${senderRejections} prior compliance violations.`,
+    };
+  }
+
+  const historyBonus = senderRejections === 0 ? 1.0 : 0.92;
+  return {
+    accepted: true,
+    purityScore: historyBonus,
+    reason: `Verified pure PI origin at fixed $3.14 Pi Peg valuation.`,
+  };
+}
 
 function buildSnapshot(): EcosystemSnapshot {
   const acceptedTransactions = state.transactions.filter((t) => t.status === 'accepted').length;
   const rejectedTransactions = state.transactions.filter((t) => t.status === 'rejected').length;
   const activeApps = state.apps.filter((a) => a.status === 'deployed').length;
   const verifiedOracleNodes = state.oracleNodes.filter((n) => n.status === 'verified').length;
-  const isolatedOracleNodes = state.oracleNodes.filter((n) => n.status === 'isolated').length;
+  const flaggedOracleNodes = state.oracleNodes.filter((n) => n.status === 'flagged').length;
 
   return {
-    constants: PI_CONSTANTS,
+    constants: PiPolicy,
     mainnetLaunched: state.mainnetLaunched,
     complianceBreached: state.complianceBreached,
     aiHealthScore: Number(state.aiHealthScore.toFixed(1)),
@@ -210,7 +325,7 @@ function buildSnapshot(): EcosystemSnapshot {
       rejectedTransactions,
       activeApps,
       verifiedOracleNodes,
-      isolatedOracleNodes,
+      isolatedOracleNodes: flaggedOracleNodes,
     },
     transactions: state.transactions,
     apps: state.apps,
@@ -226,7 +341,6 @@ app.get('/api/ecosystem', (_req: Request, res: Response) => {
   res.json(buildSnapshot());
 });
 
-// Migrated endpoint from monitoring_dashboard.js
 app.get('/api/metrics', (_req: Request, res: Response) => {
   const snap = buildSnapshot();
   res.json({
@@ -237,7 +351,6 @@ app.get('/api/metrics', (_req: Request, res: Response) => {
   });
 });
 
-// Migrated endpoint from api_endpoints.js
 app.get('/api/insights/health', (_req: Request, res: Response) => {
   res.json({
     ecosystemHealth: {
@@ -248,10 +361,9 @@ app.get('/api/insights/health', (_req: Request, res: Response) => {
   });
 });
 
-// Migrated endpoint from api_endpoints.js
 app.get('/api/pi/status/:coinId', (req: Request, res: Response) => {
   const { coinId } = req.params;
-  const isBlocked = PI_CONSTANTS.blacklistedSources.some((src) =>
+  const isBlocked = PiPolicy.blacklistedSources.some((src) =>
     String(coinId).toLowerCase().includes(src),
   );
   if (isBlocked) {
@@ -265,15 +377,14 @@ app.get('/api/pi/status/:coinId', (req: Request, res: Response) => {
   res.json({
     coinId,
     status: 'valid',
-    value: PI_CONSTANTS.fixedValueUsd,
-    symbol: PI_CONSTANTS.symbol,
+    value: PiPolicy.fixedValueUsd,
+    symbol: PiPolicy.symbol,
   });
 });
 
-// Migrated endpoint from api_endpoints.js
 app.get('/api/bridge/status/:coinId', (req: Request, res: Response) => {
   const { coinId } = req.params;
-  const isBlocked = PI_CONSTANTS.blacklistedSources.some((src) =>
+  const isBlocked = PiPolicy.blacklistedSources.some((src) =>
     String(coinId).toLowerCase().includes(src),
   );
   res.json({
@@ -282,7 +393,7 @@ app.get('/api/bridge/status/:coinId', (req: Request, res: Response) => {
   });
 });
 
-// Migrated & enhanced PIStablecoinManager + AHI AI transaction endpoint
+// PIStablecoinManager + AHI AI + PiValuePolicy + PiPurityEnforcer
 app.post('/api/pi/transaction', (req: Request, res: Response) => {
   const sender = String(req.body?.sender || 'PI-USER-LOCAL').trim();
   const recipient = String(req.body?.recipient || '').trim();
@@ -292,71 +403,57 @@ app.post('/api/pi/transaction', (req: Request, res: Response) => {
   const reportedValueUsd =
     req.body?.reportedValueUsd !== undefined
       ? Number(req.body.reportedValueUsd)
-      : PI_CONSTANTS.fixedValueUsd;
+      : PiPolicy.fixedValueUsd;
 
   if (!recipient || !Number.isFinite(amount) || amount <= 0) {
     res.status(400).json({ error: 'Valid recipient and positive PI amount are required.' });
     return;
   }
 
-  const gamblingHit = containsGamblingKeyword(`${sender} ${recipient} ${source} ${memo}`);
-  const sourceCheck = isSourceCompliant(source);
-  const valueMatches = reportedValueUsd === PI_CONSTANTS.fixedValueUsd;
+  const verdict = evaluateWithAhiAi({
+    sender,
+    recipient,
+    source,
+    memo,
+    reportedValueUsd,
+  });
 
-  let status: 'accepted' | 'rejected' = 'accepted';
-  let reason = `Verified pure PI origin at fixed $${PI_CONSTANTS.fixedValueUsd.toLocaleString()} valuation.`;
-  let purityScore = 1.0;
-
-  if (gamblingHit) {
-    status = 'rejected';
-    reason = `Rejected by AHI AI Anti-Gambling Filter: prohibited keyword "${gamblingHit}" detected.`;
-    purityScore = 0;
-    state.unethicalIncidents += 1;
-    state.aiHealthScore = Math.max(70, state.aiHealthScore - 0.8);
-  } else if (!sourceCheck.ok) {
-    status = 'rejected';
-    reason = sourceCheck.reason;
-    purityScore = 0;
-    state.aiHealthScore = Math.max(75, state.aiHealthScore - 0.4);
-  } else if (!valueMatches) {
-    status = 'rejected';
-    reason = `Rejected by GlobalPIOracle: reported value $${reportedValueUsd} deviates from fixed $${PI_CONSTANTS.fixedValueUsd} peg.`;
-    purityScore = 0;
-    state.aiHealthScore = Math.max(75, state.aiHealthScore - 0.5);
+  if (!verdict.accepted) {
+    if (verdict.reason.includes('Anti-Gambling')) {
+      state.unethicalIncidents += 1;
+      state.aiHealthScore = Math.max(70, state.aiHealthScore - 0.8);
+    } else {
+      state.aiHealthScore = Math.max(75, state.aiHealthScore - 0.4);
+    }
   } else {
     state.aiHealthScore = Math.min(100, state.aiHealthScore + 0.1);
   }
 
-  if (state.unethicalIncidents >= state.rules.evolutionThreshold) {
-    state.rules.evolutionThreshold += 5;
-    state.rules.ethicalAi = 'hyper_transparent';
-    state.rules.noGambling = 'eternal_ban';
-    appendAudit(
-      'UltimateAIGovernance',
-      'EVOLVE_RULES',
-      'info',
-      'Governance rules evolved to hyper_transparent after incident threshold reached.',
-    );
-  }
-
+  const status: 'accepted' | 'rejected' = verdict.accepted ? 'accepted' : 'rejected';
   const timestamp = new Date().toISOString();
   const tx: PiTransaction = {
     id: `tx-pi-${Date.now().toString(36)}`,
     sender,
     recipient,
     amount,
+    micronPi: Math.round(amount * PiPolicy.micronPiPerPi),
     source,
     memo: memo || 'PI settlement',
     reportedValueUsd,
     status,
-    reason,
-    purityScore,
+    reason: verdict.reason,
+    purityScore: verdict.purityScore,
     hash: sha256({ sender, recipient, amount, source, memo, reportedValueUsd, timestamp }),
     timestamp,
   };
 
   state.transactions.unshift(tx);
-  appendAudit('PIStablecoinManager', status === 'accepted' ? 'TX_ACCEPTED' : 'TX_REJECTED', status, `${tx.id}: ${reason}`);
+  appendAudit(
+    'PIStablecoinManager',
+    status === 'accepted' ? 'TX_ACCEPTED' : 'TX_REJECTED',
+    status,
+    `${tx.id} (${tx.amount} PI / ${tx.micronPi.toLocaleString()} µπ): ${tx.reason}`,
+  );
 
   res.status(status === 'accepted' ? 201 : 403).json({
     transaction: tx,
@@ -367,7 +464,7 @@ app.post('/api/pi/transaction', (req: Request, res: Response) => {
 // AutonomousAppBuilder endpoint (PI-exclusive, zero gambling)
 app.post('/api/apps/generate', (req: Request, res: Response) => {
   const name = String(req.body?.name || '').trim();
-  const category = String(req.body?.category || 'Utility').trim();
+  const category = String(req.body?.category || 'Commerce').trim();
   const description = String(req.body?.description || '').trim();
   const paymentAsset = String(req.body?.paymentAsset || 'PI').trim().toUpperCase();
 
@@ -382,7 +479,7 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
 
   if (gamblingHit) {
     status = 'rejected';
-    complianceReason = `Rejected by AutonomousAppBuilder: gambling keyword "${gamblingHit}" violates no-gambling mandate.`;
+    complianceReason = `Rejected by PiPurityEnforcer: gambling keyword "${gamblingHit}" violates no-gambling mandate.`;
     state.unethicalIncidents += 1;
   } else if (paymentAsset !== 'PI') {
     status = 'rejected';
@@ -398,7 +495,7 @@ app.post('/api/apps/generate', (req: Request, res: Response) => {
     complianceReason,
     manifestSnippet:
       status === 'deployed'
-        ? `// Generated by AutonomousAppBuilder\nexport const APP_NAME = ${JSON.stringify(name)};\nexport const SETTLEMENT_ASSET = "PI";\nexport const FIXED_VALUE_USD = ${PI_CONSTANTS.fixedValueUsd};`
+        ? `// Generated by AutonomousAppBuilder\nexport const APP_NAME = ${JSON.stringify(name)};\nexport const SETTLEMENT_ASSET = "PI";\nexport const FIXED_VALUE_USD = ${PiPolicy.fixedValueUsd};`
         : `// Blocked by AHI AI Compliance Gate\n// Reason: ${complianceReason}`,
     createdAt: new Date().toISOString(),
   };
@@ -433,7 +530,7 @@ app.post('/api/apps/:id/halt', (req: Request, res: Response) => {
   res.json({ app: target, snapshot: buildSnapshot() });
 });
 
-// GlobalPIOracleComplianceVerifier endpoint
+// GlobalPIOracleComplianceVerifier: Deviation flags node for community vote (democratic governance)
 app.post('/api/oracle/verify', (req: Request, res: Response) => {
   const nodeId = String(req.body?.nodeId || '').trim();
   const reportedValueUsd = Number(req.body?.reportedValueUsd);
@@ -447,13 +544,13 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
   node.reportedValueUsd = reportedValueUsd;
   node.lastCheckedAt = new Date().toISOString();
 
-  if (reportedValueUsd !== PI_CONSTANTS.fixedValueUsd) {
-    node.status = 'isolated';
+  if (Math.abs(reportedValueUsd - PiPolicy.fixedValueUsd) > 1e-9) {
+    node.status = 'flagged';
     appendAudit(
       'GlobalPIOracle',
-      'NODE_ISOLATED',
+      'NODE_FLAGGED_FOR_VOTE',
       'rejected',
-      `Oracle ${node.id} reported $${reportedValueUsd} (!= $${PI_CONSTANTS.fixedValueUsd}) and was isolated.`,
+      `Oracle ${node.id} reported $${reportedValueUsd.toFixed(2)} (!= $${PiPolicy.fixedValueUsd}) and was flagged for community vote.`,
     );
   } else {
     node.status = 'verified';
@@ -461,27 +558,28 @@ app.post('/api/oracle/verify', (req: Request, res: Response) => {
       'GlobalPIOracle',
       'NODE_VERIFIED',
       'accepted',
-      `Oracle ${node.id} verified fixed valuation $${PI_CONSTANTS.fixedValueUsd}.`,
+      `Oracle ${node.id} confirmed $3.14 Pi Peg valuation.`,
     );
   }
 
   res.json({ node, snapshot: buildSnapshot() });
 });
 
-// MainnetGovernor (from mainnet_governor.cpp)
+// MainnetGovernor: Audits oracle alignment, app compliance, and purity filter health
 app.post('/api/governance/audit', (_req: Request, res: Response) => {
-  const isolatedCount = state.oracleNodes.filter((n) => n.status === 'isolated').length;
-  const allNodesHealthy = isolatedCount === 0;
+  const flaggedCount = state.oracleNodes.filter((n) => n.status === 'flagged').length;
+  const allNodesHealthy = flaggedCount === 0;
   const acceptedCount = state.transactions.filter((t) => t.status === 'accepted').length;
-  const compliant = allNodesHealthy && acceptedCount > 0;
+  const activeAppsCount = state.apps.filter((a) => a.status === 'deployed').length;
+  const compliant = allNodesHealthy && acceptedCount > 0 && activeAppsCount > 0 && state.aiHealthScore >= 75;
 
   appendAudit(
     'MainnetGovernor',
     'ECOSYSTEM_AUDIT',
     compliant ? 'accepted' : 'rejected',
     compliant
-      ? `Ecosystem audit passed across ${state.oracleNodes.length} oracle nodes and ${acceptedCount} pure PI transactions.`
-      : `Ecosystem audit flagged ${isolatedCount} isolated oracle node(s). Restore consensus before launch.`,
+      ? `Ecosystem audit passed: ${state.oracleNodes.length} oracle nodes aligned at $3.14, ${activeAppsCount} PI apps compliant, AHI AI health ${state.aiHealthScore.toFixed(1)}%.`
+      : `Ecosystem audit flagged ${flaggedCount} oracle node(s) for community vote. Restore $3.14 alignment before launch.`,
   );
 
   res.json({ compliant, snapshot: buildSnapshot() });
@@ -492,16 +590,16 @@ app.post('/api/governance/mainnet-launch', (_req: Request, res: Response) => {
     res.status(409).json({ error: 'Mainnet is already launched.', snapshot: buildSnapshot() });
     return;
   }
-  const isolatedCount = state.oracleNodes.filter((n) => n.status === 'isolated').length;
-  if (isolatedCount > 0) {
+  const flaggedCount = state.oracleNodes.filter((n) => n.status === 'flagged').length;
+  if (flaggedCount > 0) {
     appendAudit(
       'MainnetGovernor',
       'LAUNCH_ABORTED',
       'rejected',
-      `Mainnet launch aborted: ${isolatedCount} oracle node(s) deviated from $${PI_CONSTANTS.fixedValueUsd}.`,
+      `Mainnet launch aborted: ${flaggedCount} flagged oracle node(s) deviated from $3.14.`,
     );
     res.status(400).json({
-      error: 'Mainnet launch aborted by MainnetGovernor: isolate/restore deviated oracle nodes first.',
+      error: `Mainnet launch aborted by MainnetGovernor: ${flaggedCount} node(s) flagged for community vote must be restored to $3.14 first.`,
       snapshot: buildSnapshot(),
     });
     return;
@@ -512,7 +610,7 @@ app.post('/api/governance/mainnet-launch', (_req: Request, res: Response) => {
     'MainnetGovernor',
     'MAINNET_LAUNCHED',
     'accepted',
-    'MainnetGovernor approved launch. Stellar Pi Core stablecoin ecosystem is live.',
+    'MainnetGovernor approved launch. Stellar Pi Core ($3.14 fixed peg) is live on SCP.',
   );
   res.json({ launched: true, snapshot: buildSnapshot() });
 });
