@@ -1,3 +1,5 @@
+> *⚠️ Independent Simulation Project - Not affiliated with Pi Core Team. Pi Stablecoin is a research concept, not an official asset.*
+
 # Hyper-Tech Pi Ecosystem Super App
 
 This repository has been upgraded to a Stablecoin-Only Pi Ecosystem super app, designed for autonomously building, managing, and running internal PI-exclusive applications on Raspberry Pi. All transactions use PI Coin with a fixed value of $314,159, sourced only from mining, contribution rewards, and P2P. The system automatically rejects volatile technologies, external blockchains, and **absolutely no gambling applications**.
