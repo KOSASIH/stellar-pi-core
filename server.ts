@@ -84,7 +84,7 @@ const state: {
       memo: 'Hardware node mining settlement',
       reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
       status: 'accepted',
-      reason: 'Verified pure PI origin at fixed $314,159 valuation.',
+      reason: 'Verified pure PI origin at fixed $3.14 valuation.',
       purityScore: 1.0,
       hash: sha256({ id: 'tx-pi-001', amount: 12.5, source: 'mining' }),
       timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
@@ -98,7 +98,7 @@ const state: {
       memo: 'Ecosystem code contribution reward',
       reportedValueUsd: PI_CONSTANTS.fixedValueUsd,
       status: 'accepted',
-      reason: 'Verified pure PI origin at fixed $314,159 valuation.',
+      reason: 'Verified pure PI origin at fixed $3.14 valuation.',
       purityScore: 1.0,
       hash: sha256({ id: 'tx-pi-002', amount: 4, source: 'contribution_rewards' }),
       timestamp: new Date(Date.now() - 1000 * 60 * 11).toISOString(),
@@ -110,7 +110,7 @@ const state: {
       amount: 250,
       source: 'exchange',
       memo: 'External exchange liquidity bridge',
-      reportedValueUsd: 312900,
+      reportedValueUsd: 3.12,
       status: 'rejected',
       reason: 'Rejected tainted/exchange source "exchange" by PiPurityAccountabilityEnforcer.',
       purityScore: 0,
@@ -187,7 +187,7 @@ appendAudit(
   'UltimateIntegrationCore',
   'BOOT_SEQUENCE',
   'info',
-  'Initialized Stellar Pi Core stablecoin policy ($314,159 fixed valuation, zero-gambling mandate).',
+  'Initialized Stellar Pi Core stablecoin policy ($3.14 fixed valuation, zero-gambling mandate).',
 );
 
 function buildSnapshot(): EcosystemSnapshot {

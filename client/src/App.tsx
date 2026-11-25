@@ -30,7 +30,7 @@ export default function App() {
   const [amount, setAmount] = useState('25');
   const [source, setSource] = useState('mining');
   const [memo, setMemo] = useState('Peer-to-peer equipment settlement');
-  const [reportedValueUsd, setReportedValueUsd] = useState('314159');
+  const [reportedValueUsd, setReportedValueUsd] = useState('3.14');
   const [submittingTx, setSubmittingTx] = useState(false);
 
   // App builder form state
@@ -144,11 +144,11 @@ export default function App() {
     const data = await res.json();
     if (data.snapshot) setSnapshot(data.snapshot);
     setFeedback({
-      kind: value === 314159 ? 'success' : 'error',
+      kind: value === 3.14 ? 'success' : 'error',
       text:
-        value === 314159
-          ? `Oracle ${nodeId} confirmed $314,159 fixed valuation.`
-          : `Oracle ${nodeId} deviated ($${value.toLocaleString()}) and was isolated.`,
+        value === 3.14
+          ? `Oracle ${nodeId} confirmed $3.14 Pi Peg valuation.`
+          : `Oracle ${nodeId} deviated ($${value.toLocaleString()}) and was flagged for community vote.`,
     });
   }
 
@@ -413,6 +413,7 @@ export default function App() {
                 <span>Reported Valuation (USD)</span>
                 <input
                   type="number"
+                  step="any"
                   value={reportedValueUsd}
                   onChange={(e) => setReportedValueUsd(e.target.value)}
                   className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
@@ -466,7 +467,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setSource('mining');
-                    setReportedValueUsd('314159');
+                    setReportedValueUsd('3.14');
                     setMemo('Node mining reward settlement');
                   }}
                   className="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
@@ -577,7 +578,7 @@ export default function App() {
                     onChange={(e) => setPaymentAsset(e.target.value)}
                     className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white"
                   >
-                    <option value="PI">PI (Fixed $314,159)</option>
+                    <option value="PI">PI (Fixed $3.14)</option>
                     <option value="USDT">USDT (Volatile - Rejected)</option>
                     <option value="BTC">BTC (External - Rejected)</option>
                   </select>
@@ -660,7 +661,7 @@ export default function App() {
                   Global PI Oracle Compliance Verifier
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Nodes reporting any value other than $314,159 are immediately isolated.
+                  Nodes reporting any value other than $3.14 are flagged for community vote.
                 </p>
               </div>
 
@@ -692,14 +693,14 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => handleOracleVerify(node.id, 314159)}
+                        onClick={() => handleOracleVerify(node.id, 3.14)}
                         className="text-xs px-3 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/40 text-emerald-300"
                       >
-                        Sync $314,159
+                        Sync $3.14
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleOracleVerify(node.id, 314250)}
+                        onClick={() => handleOracleVerify(node.id, 3.20)}
                         className="text-xs px-3 py-1.5 rounded bg-rose-600/20 hover:bg-rose-600/30 border border-rose-600/40 text-rose-300"
                       >
                         Simulate Deviation
@@ -745,7 +746,7 @@ export default function App() {
                 <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs text-amber-200 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
                   <span>
-                    {metrics.isolatedOracleNodes} isolated node(s) must be restored to $314,159 before mainnet launch.
+                    {metrics.isolatedOracleNodes} isolated node(s) must be restored to $3.14 before mainnet launch.
                   </span>
                 </div>
               )}

@@ -1,7 +1,7 @@
 export const PI_CONSTANTS = {
   symbol: 'PI',
   totalSupply: 100_000_000_000,
-  fixedValueUsd: 314_159,
+  fixedValueUsd: 3.14,
   transactionFeeUsd: 0.001,
   blockTimeSec: 5,
   collateralRatio: 1.5,
