@@ -456,4 +456,19 @@ export function isConstitutionalViolation(title: string, description: string): {
   return { violated: false, reason: 'Constitutional Rules preserved.' };
 }
 
+export function computeGiniCoefficient(values: number[]): number {
+  const clean = values.filter((v) => Number.isFinite(v) && v >= 0).sort((a, b) => a - b);
+  const n = clean.length;
+  if (n <= 1) return 0;
+  const total = clean.reduce((sum, v) => sum + v, 0);
+  if (total <= 0) return 0;
+  let weightedSum = 0;
+  for (let i = 0; i < n; i += 1) {
+    weightedSum += (2 * (i + 1) - n - 1) * clean[i];
+  }
+  const gini = weightedSum / (n * total);
+  return Number(Math.max(0, Math.min(1, gini)).toFixed(2));
+}
+
+
 

@@ -1,6 +1,8 @@
 import type { FormEvent } from 'react';
 import { CheckCircle2, Smartphone } from 'lucide-react';
 import {
+  computePouwRewardNvc,
+  computeQuadraticVotingPower,
   formatMicronNova,
   formatUsd,
   nvcToUsd,
@@ -219,14 +221,25 @@ export function CitizensReservesPanel({
                 <tr className="border-b border-slate-800 text-slate-400">
                   <th className="py-2 pr-3 font-medium">Citizen & Device</th>
                   <th className="py-2 px-3 font-medium">Region</th>
-                  <th className="py-2 px-3 font-medium text-right">Reputation</th>
-                  <th className="py-2 px-3 font-medium text-right">Balance & 0.01% Cap</th>
+                  <th className="py-2 px-3 font-medium text-right">Rep & Q-Vote</th>
+                  <th className="py-2 px-3 font-medium text-right">Balance & PoUW Factor</th>
                   <th className="py-2 pl-3 font-medium text-right">Mobile SCP</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/70">
                 {snapshot.citizens.map((citizen) => {
                   const capPct = (citizen.balanceNvc / constants.maxWalletHoldingNvc) * 100;
+                  const pouwCalc = computePouwRewardNvc({
+                    usefulWorkScore: 90,
+                    uptimeRatio: 1,
+                    purityScore: 1,
+                    walletHoldingNvc: citizen.balanceNvc,
+                  });
+                  const qVote = computeQuadraticVotingPower({
+                    usefulWorkScore: Math.min(100, Math.max(40, citizen.miningSessions * 1.5)),
+                    reputationScore: citizen.reputationScore,
+                    hasKyc: citizen.kycVerified,
+                  });
                   return (
                     <tr key={citizen.id} className="hover:bg-slate-800/30">
                       <td className="py-3 pr-3">
@@ -236,13 +249,14 @@ export function CitizensReservesPanel({
                         </div>
                       </td>
                       <td className="py-3 px-3 text-slate-300">{citizen.region}</td>
-                      <td className="py-3 px-3 text-right tabular-nums text-emerald-300 font-medium">
-                        {citizen.reputationScore}/100
+                      <td className="py-3 px-3 text-right tabular-nums">
+                        <div className="text-emerald-300 font-medium">{citizen.reputationScore}/100</div>
+                        <div className="text-[11px] font-mono text-amber-300">Q-Vote {qVote}</div>
                       </td>
                       <td className="py-3 px-3 text-right tabular-nums">
                         <div className="text-white font-semibold">{citizen.balanceNvc.toFixed(4)} NVC</div>
                         <div className="text-[11px] text-slate-400">
-                          {formatUsd(nvcToUsd(citizen.balanceNvc))} · {capPct.toFixed(4)}% of cap
+                          {formatUsd(nvcToUsd(citizen.balanceNvc))} · {capPct.toFixed(4)}% cap · {pouwCalc.multiplier}x PoUW
                         </div>
                       </td>
                       <td className="py-3 pl-3 text-right">

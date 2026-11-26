@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Bot, Brain, Eye, Flame, Lock, Network, Scale, Shield, ShieldCheck, Zap } from 'lucide-react';
-import { NovaPolicy, type EcosystemSnapshot } from '../../../shared/novaPolicy.ts';
+import { NovaPolicy, type EcosystemSnapshot, type WorkProofType } from '../../../shared/novaPolicy.ts';
 import { safeFetchJson } from '../lib/novaLocalEngine.ts';
 import { NovaHyperMindV2Section } from './NovaHyperMindV2Section.tsx';
 
@@ -19,6 +19,14 @@ interface HyperMindPanelProps {
   onSimulatePlutocracyAttack: () => void;
   onSimulateWasteAttack: () => void;
   onClaimWorkTask: (taskId: string) => void;
+  onCreateWorkTask: (params: {
+    title: string;
+    workType: WorkProofType;
+    offeredRewardNvc: number;
+  }) => void;
+  onAdaptConsensus: (
+    scenario: 'tps-drop' | 'malicious-node' | 'healthy-1000' | 'restore-normal',
+  ) => void;
   onRunFailureScan: () => void;
 }
 
@@ -56,6 +64,8 @@ export function HyperMindPanel({
   onSimulatePlutocracyAttack,
   onSimulateWasteAttack,
   onClaimWorkTask,
+  onCreateWorkTask,
+  onAdaptConsensus,
   onRunFailureScan,
 }: HyperMindPanelProps) {
   const [logSeverityFilter, setLogSeverityFilter] = useState<'all' | 'blocked' | 'predicted' | 'healed'>('all');
@@ -176,6 +186,8 @@ export function HyperMindPanel({
         selectedCitizenId={selectedCitizenId}
         onChangeSelectedCitizenId={onChangeSelectedCitizenId}
         onClaimWorkTask={onClaimWorkTask}
+        onCreateWorkTask={onCreateWorkTask}
+        onAdaptConsensus={onAdaptConsensus}
         onRunFailureScan={onRunFailureScan}
       />
 

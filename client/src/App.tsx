@@ -27,6 +27,7 @@ import {
   type MarketplaceListing,
   type NovaAppRecord,
   type NovaTransaction,
+  type WorkProofType,
 } from '../../shared/novaPolicy.ts';
 import { AppsPanel } from './components/AppsPanel.tsx';
 import { AuditPanel } from './components/AuditPanel.tsx';
@@ -38,9 +39,11 @@ import { OverviewPanel, type WorkspaceTabId } from './components/OverviewPanel.t
 import { ProvenanceModal } from './components/ProvenanceModal.tsx';
 import { TransactionsPanel } from './components/TransactionsPanel.tsx';
 import {
+  applyLocalAdaptiveConsensusFallback,
   applyLocalAppFallback,
   applyLocalCitizenRegisterFallback,
   applyLocalClaimWorkTaskFallback,
+  applyLocalCreateWorkTaskFallback,
   applyLocalMarketplaceBuyFallback,
   applyLocalMarketplaceListingFallback,
   applyLocalMudarabahFallback,
@@ -582,6 +585,81 @@ export default function App() {
       kind: 'success',
       text: 'FailurePreventionEngine swept all 7 failure modes locally. All GREEN / AUTO-FIXED.',
     });
+  }
+
+  async function handleCreateWorkTask(params: {
+    title: string;
+    workType: WorkProofType;
+    offeredRewardNvc: number;
+  }) {
+    setFeedback(null);
+    const result = await safeFetchJson<{
+      task?: { id: string; title: string };
+      snapshot?: EcosystemSnapshot;
+      error?: string;
+    }>('/api/pouw/task/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...params, requesterId: selectedCitizenId }),
+    });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.task) {
+        setFeedback({
+          kind: 'success',
+          text: `Published UsefulWork bounty "${result.data.task.title}" (${result.data.task.id}) to circular marketplace.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Task rejected by HyperScanner.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalCreateWorkTaskFallback(snapshot, {
+        ...params,
+        requesterId: selectedCitizenId,
+      });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.task) {
+        setFeedback({
+          kind: 'success',
+          text: `Published UsefulWork bounty "${local.task.title}" (${local.task.id}) locally.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Task rejected by HyperScanner.' });
+      }
+    }
+  }
+
+  async function handleAdaptConsensus(
+    scenario: 'tps-drop' | 'malicious-node' | 'healthy-1000' | 'restore-normal',
+  ) {
+    setFeedback(null);
+    const result = await safeFetchJson<{
+      mode?: string;
+      snapshot?: EcosystemSnapshot;
+      error?: string;
+    }>('/api/consensus/adapt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario }),
+    });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      setFeedback({
+        kind: 'success',
+        text: `AdaptiveConsensus autonomously transitioned to ${result.data.mode} mode (Peg $3.14 & 0% Riba immutable).`,
+      });
+      return;
+    }
+    if (snapshot) {
+      const next = applyLocalAdaptiveConsensusFallback(snapshot, scenario);
+      setSnapshot(next);
+      setFeedback({
+        kind: 'success',
+        text: `AdaptiveConsensus locally transitioned to ${next.adaptiveConsensus?.mode ?? 'Normal'} mode.`,
+      });
+    }
   }
 
   async function handleTransactionSubmit(e: FormEvent) {
@@ -1610,6 +1688,8 @@ export default function App() {
               onSimulatePlutocracyAttack={handleSimulatePlutocracyAttack}
               onSimulateWasteAttack={handleSimulateWasteAttack}
               onClaimWorkTask={handleClaimWorkTask}
+              onCreateWorkTask={handleCreateWorkTask}
+              onAdaptConsensus={handleAdaptConsensus}
               onRunFailureScan={handleRunFailureScan}
             />
           )}

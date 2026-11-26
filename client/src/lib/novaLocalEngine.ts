@@ -7,7 +7,9 @@ import {
   type EcosystemSnapshot,
   type NovaAppRecord,
   type NovaTransaction,
+  type UsefulWorkTask,
   type WorkProofRecord,
+  type WorkProofType,
 } from '../../../shared/novaPolicy.ts';
 
 export type HyperAlertKey = 'whale' | 'scam' | 'oracle' | 'self-heal' | 'plutocracy' | 'waste';
@@ -1430,5 +1432,156 @@ export function applyLocalClaimWorkTaskFallback(
     },
   };
 }
+
+export function applyLocalCreateWorkTaskFallback(
+  prev: EcosystemSnapshot,
+  params: { title: string; workType: WorkProofType; requesterId: string; offeredRewardNvc: number },
+): { ok: boolean; task?: UsefulWorkTask; snapshot: EcosystemSnapshot; error?: string } {
+  const cleanTitle = params.title.trim();
+  const scan = preScreenCompliance(cleanTitle);
+  if (!cleanTitle || !Number.isFinite(params.offeredRewardNvc) || params.offeredRewardNvc <= 0) {
+    return { ok: false, snapshot: prev, error: 'Provide a valid UsefulWork task title and positive NVC reward.' };
+  }
+  if (!scan.passed) {
+    return { ok: false, snapshot: prev, error: scan.message };
+  }
+  const task: UsefulWorkTask = {
+    id: `TASK-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+    workType: params.workType,
+    requesterId: params.requesterId,
+    title: cleanTitle,
+    offeredRewardNvc: Number(params.offeredRewardNvc.toFixed(4)),
+    status: 'open',
+  };
+  const pouw = prev.pouw ?? createLocalFallbackSnapshot().pouw!;
+  return {
+    ok: true,
+    task,
+    snapshot: {
+      ...prev,
+      pouw: {
+        ...pouw,
+        workMarketplace: [task, ...pouw.workMarketplace].slice(0, 24),
+      },
+    },
+  };
+}
+
+export function applyLocalAdaptiveConsensusFallback(
+  prev: EcosystemSnapshot,
+  scenario: 'tps-drop' | 'malicious-node' | 'healthy-1000' | 'restore-normal',
+): EcosystemSnapshot {
+  const adaptive = prev.adaptiveConsensus ?? createLocalFallbackSnapshot().adaptiveConsensus!;
+  const timestamp = new Date().toISOString();
+  const nextHeight = (prev.metrics.latestBlockHeight || 1042) + 1;
+  const oldMode = adaptive.mode;
+
+  if (scenario === 'tps-drop') {
+    return {
+      ...prev,
+      adaptiveConsensus: {
+        ...adaptive,
+        mode: 'Defensive',
+        healthyStreakBlocks: 0,
+        validatorRedundancy: 5,
+        oracleCheckFreqSec: 2,
+        maxTxBatchSize: 150,
+        adaptiveLog: [
+          {
+            id: `adp-${Date.now()}`,
+            blockHeight: nextHeight,
+            reason: 'TPS dropped >20% (1200 -> 820 TPS); raised redundancy to 5 & tightened oracle checks to 2s',
+            parameter: 'AdaptiveMode',
+            oldValue: oldMode,
+            newValue: 'Defensive (5 Validators · 2s Oracle)',
+            timestamp,
+          },
+          ...adaptive.adaptiveLog,
+        ].slice(0, 20),
+      },
+    };
+  }
+  if (scenario === 'malicious-node') {
+    const rogue = 'VAL-EXT-ROGUE-07';
+    return {
+      ...prev,
+      adaptiveConsensus: {
+        ...adaptive,
+        mode: 'Defensive',
+        healthyStreakBlocks: 0,
+        validatorRedundancy: 5,
+        oracleCheckFreqSec: 2,
+        maxTxBatchSize: 150,
+        quarantinedNodes: adaptive.quarantinedNodes.includes(rogue)
+          ? adaptive.quarantinedNodes
+          : [rogue, ...adaptive.quarantinedNodes],
+        adaptiveLog: [
+          {
+            id: `adp-${Date.now()}`,
+            blockHeight: nextHeight,
+            reason: `Validator ${rogue} detected 2x: auto-quarantined 100 blocks & promoted Citizen NVC-MINER-RASPI-09`,
+            parameter: 'ValidatorQuarantine',
+            oldValue: rogue,
+            newValue: 'Quarantined 100 blk -> Backup Citizen Promoted',
+            timestamp,
+          },
+          ...adaptive.adaptiveLog,
+        ].slice(0, 20),
+      },
+    };
+  }
+  if (scenario === 'healthy-1000') {
+    return {
+      ...prev,
+      pouw: prev.pouw ? { ...prev.pouw, energyPerTxWh: 0.03 } : prev.pouw,
+      adaptiveConsensus: {
+        ...adaptive,
+        mode: 'Eco',
+        healthyStreakBlocks: Math.max(1000, adaptive.healthyStreakBlocks + 1000),
+        validatorRedundancy: 3,
+        oracleCheckFreqSec: 10,
+        maxTxBatchSize: 500,
+        quarantinedNodes: [],
+        adaptiveLog: [
+          {
+            id: `adp-${Date.now()}`,
+            blockHeight: nextHeight,
+            reason: '1000+ consecutive healthy blocks verified; entered Eco mode (-30% redundant checks)',
+            parameter: 'AdaptiveMode',
+            oldValue: oldMode,
+            newValue: 'Eco (-30% Redundancy · 0.03 Wh/tx)',
+            timestamp,
+          },
+          ...adaptive.adaptiveLog,
+        ].slice(0, 20),
+      },
+    };
+  }
+  return {
+    ...prev,
+    pouw: prev.pouw ? { ...prev.pouw, energyPerTxWh: 0.04 } : prev.pouw,
+    adaptiveConsensus: {
+      ...adaptive,
+      mode: 'Normal',
+      validatorRedundancy: 3,
+      oracleCheckFreqSec: 5,
+      maxTxBatchSize: 350,
+      quarantinedNodes: [],
+      adaptiveLog: [
+        {
+          id: `adp-${Date.now()}`,
+          blockHeight: nextHeight,
+          reason: 'Consensus telemetry stabilized; restored balanced Normal SCP parameters',
+          parameter: 'AdaptiveMode',
+          oldValue: oldMode,
+          newValue: 'Normal (3 Validators · 5s Oracle)',
+          timestamp,
+        },
+        ...adaptive.adaptiveLog,
+      ].slice(0, 20),
+    },
+  };
+}
+
 
 

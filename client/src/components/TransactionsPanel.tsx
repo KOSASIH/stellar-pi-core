@@ -197,6 +197,33 @@ export function TransactionsPanel({
           <span>{txPreScan.message}</span>
         </div>
 
+        <div className="grid grid-cols-3 gap-2 text-[11px] tabular-nums rounded-lg bg-slate-950 border border-slate-800 px-3 py-2">
+          <div>
+            <span className="text-slate-400 block">Finality Cost</span>
+            <strong className="font-mono text-emerald-300">
+              {snapshot.pouw?.energyPerTxWh ?? 0.04} Wh · $0.001
+            </strong>
+          </div>
+          <div>
+            <span className="text-slate-400 block">USD @ $3.14</span>
+            <strong className="font-mono text-white">
+              {formatUsd((Number(amount) || 0) * 3.14)}
+            </strong>
+          </div>
+          <div>
+            <span className="text-slate-400 block">0.01% Cap</span>
+            <strong
+              className={`font-mono ${
+                (Number(amount) || 0) > snapshot.constants.maxWalletHoldingNvc
+                  ? 'text-rose-300'
+                  : 'text-amber-300'
+              }`}
+            >
+              {(Number(amount) || 0) > snapshot.constants.maxWalletHoldingNvc ? 'EXCEEDS 10M' : 'Clear'}
+            </strong>
+          </div>
+        </div>
+
         <button
           type="submit"
           disabled={submittingTx}

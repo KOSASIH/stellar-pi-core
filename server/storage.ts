@@ -47,6 +47,7 @@ export interface PersistedEcosystemData {
     adaptiveLog?: AdaptiveLogItem[];
     failureAutoFixes?: number;
     failureChecks?: FailureModeStatus[];
+    quarantinedNodes?: string[];
   };
   hyperMind: {
     threatsBlocked: number;

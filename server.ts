@@ -5,6 +5,7 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import {
   NovaPolicy,
+  computeGiniCoefficient,
   computePouwRewardNvc,
   computeQuadraticVotingPower,
   isConstitutionalViolation,
@@ -58,6 +59,7 @@ interface EcosystemState {
   adaptiveLog: AdaptiveLogItem[];
   failureAutoFixes: number;
   failureChecks: FailureModeStatus[];
+  quarantinedNodes: string[];
 }
 
 function createInitialState(): EcosystemState {
@@ -548,6 +550,7 @@ function createInitialState(): EcosystemState {
       lastAction: 'Standby Citizen failover slots armed (<1s auto-promotion).',
     },
   ],
+  quarantinedNodes: [],
   };
 }
 
@@ -651,6 +654,9 @@ function hydrateFromPersistence() {
       failureChecks: persisted.state.failureChecks?.length
         ? persisted.state.failureChecks
         : defaults.failureChecks,
+      quarantinedNodes: Array.isArray(persisted.state.quarantinedNodes)
+        ? persisted.state.quarantinedNodes
+        : [],
     };
     hyperMind.threatsBlocked = persisted.hyperMind.threatsBlocked ?? hyperMind.threatsBlocked;
     hyperMind.scamBlocked = persisted.hyperMind.scamBlocked ?? hyperMind.scamBlocked;
@@ -745,15 +751,20 @@ function buildSnapshot(): EcosystemSnapshot {
     scpBlocks: state.scpBlocks,
     pouw: {
       totalUsefulWorkDone: state.workProofs.length,
-      energyPerTxWh: 0.04,
-      productiveValueRatio: 98.4,
+      energyPerTxWh: state.adaptiveMode === 'Eco' ? 0.03 : 0.04,
+      productiveValueRatio: Number(
+        Math.min(
+          99.8,
+          98.2 + state.workProofs.length * 0.08,
+        ).toFixed(1),
+      ),
       mintingPaused: false,
       workProofs: state.workProofs.slice(0, 10),
       workMarketplace: state.workMarketplace,
     },
     antiPlutocracy: {
-      giniCoefficient: 0.21,
-      top10ControlPercent: 18.4,
+      giniCoefficient: computeGiniCoefficient(state.citizens.map((c) => c.balanceNvc)),
+      top10ControlPercent: Number((100 / Math.max(5, state.citizens.length + 2)).toFixed(1)),
       rewardFairnessScore: 98.8,
       constitutionalRulesLocked: true,
     },
@@ -763,7 +774,7 @@ function buildSnapshot(): EcosystemSnapshot {
       validatorRedundancy: state.adaptiveMode === 'Defensive' ? 5 : 3,
       oracleCheckFreqSec: state.adaptiveMode === 'Defensive' ? 2 : state.adaptiveMode === 'Eco' ? 10 : 5,
       maxTxBatchSize: state.adaptiveMode === 'Defensive' ? 150 : state.adaptiveMode === 'Eco' ? 500 : 350,
-      quarantinedNodes: [],
+      quarantinedNodes: state.quarantinedNodes,
       adaptiveLog: state.adaptiveLog.slice(0, 20),
     },
     failurePrevention: {
@@ -1835,6 +1846,130 @@ app.post('/api/pouw/task/claim', (req: Request, res: Response) => {
   res.status(201).json({ task, proof, rewardNvc: calc.rewardNvc, snapshot: buildSnapshot() });
 });
 
+// NovaHyperMind v2: Post New Circular UsefulWork Marketplace Task
+app.post('/api/pouw/task/create', (req: Request, res: Response) => {
+  const title = String(req.body?.title || '').trim();
+  const workType = String(req.body?.workType || 'Oracle Check').trim() as UsefulWorkTask['workType'];
+  const requesterId = String(req.body?.requesterId || 'NVC-MINER-RASPI-09').trim();
+  const offeredRewardNvc = Number(req.body?.offeredRewardNvc || 0.85);
+  const allowedTypes: UsefulWorkTask['workType'][] = [
+    'Validating Halal TX',
+    'Oracle Check',
+    'HyperScanner Check',
+    'Citizen Storage',
+    'Self-Heal Task',
+  ];
+
+  if (!title || !allowedTypes.includes(workType) || !Number.isFinite(offeredRewardNvc) || offeredRewardNvc <= 0 || offeredRewardNvc > 50) {
+    res.status(400).json({ error: 'Invalid UsefulWork task specification or reward ceiling (max 50 NVC).' });
+    return;
+  }
+
+  const scan = hyperMind.scanCompliance({ memo: title, category: workType });
+  if (!scan.passed) {
+    res.status(403).json({
+      error: `Task rejected by HyperScanner/RibaGuard: ${scan.reason}`,
+      snapshot: buildSnapshot(),
+    });
+    return;
+  }
+
+  const task: UsefulWorkTask = {
+    id: `TASK-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+    workType,
+    requesterId,
+    title,
+    offeredRewardNvc: Number(offeredRewardNvc.toFixed(4)),
+    status: 'open',
+  };
+  state.workMarketplace.unshift(task);
+  if (state.workMarketplace.length > 24) state.workMarketplace.pop();
+
+  appendAudit(
+    'PoUW',
+    'USEFUL_WORK_POSTED',
+    'accepted',
+    `${requesterId} posted UsefulWork bounty "${title}" (${workType}) for ${task.offeredRewardNvc} NVC.`,
+  );
+
+  res.status(201).json({ task, snapshot: buildSnapshot() });
+});
+
+// NovaHyperMind v2: Autonomous Consensus Telemetry Adaptation
+app.post('/api/consensus/adapt', (req: Request, res: Response) => {
+  const scenario = String(req.body?.scenario || '').trim();
+  const timestamp = new Date().toISOString();
+  const nextHeight = (state.scpBlocks[0]?.height || 1042) + 1;
+
+  if (scenario === 'tps-drop') {
+    const oldMode = state.adaptiveMode;
+    state.adaptiveMode = 'Defensive';
+    state.healthyStreakBlocks = 0;
+    state.adaptiveLog.unshift({
+      id: `adp-${Date.now()}`,
+      blockHeight: nextHeight,
+      reason: 'TPS dropped >20% (1200 -> 820 TPS); raised validator redundancy to 5, oracle check to 2s, batch limit to 150 tx',
+      parameter: 'AdaptiveMode',
+      oldValue: oldMode,
+      newValue: 'Defensive (5 Validators · 2s Oracle · 150 tx)',
+      timestamp,
+    });
+  } else if (scenario === 'malicious-node') {
+    const rogueNode = 'VAL-EXT-ROGUE-07';
+    if (!state.quarantinedNodes.includes(rogueNode)) {
+      state.quarantinedNodes.unshift(rogueNode);
+    }
+    state.adaptiveMode = 'Defensive';
+    state.healthyStreakBlocks = 0;
+    state.failureAutoFixes += 1;
+    state.adaptiveLog.unshift({
+      id: `adp-${Date.now()}`,
+      blockHeight: nextHeight,
+      reason: `Validator ${rogueNode} exhibited malicious pattern 2x: auto-quarantined 100 blocks & promoted Citizen NVC-MINER-RASPI-09`,
+      parameter: 'ValidatorQuarantine',
+      oldValue: rogueNode,
+      newValue: 'Quarantined 100 blk -> Backup Citizen Promoted',
+      timestamp,
+    });
+  } else if (scenario === 'healthy-1000') {
+    const oldMode = state.adaptiveMode;
+    state.adaptiveMode = 'Eco';
+    state.healthyStreakBlocks = Math.max(1000, state.healthyStreakBlocks + 1000);
+    state.quarantinedNodes = [];
+    state.adaptiveLog.unshift({
+      id: `adp-${Date.now()}`,
+      blockHeight: nextHeight,
+      reason: '1000+ consecutive healthy blocks verified; entered Eco mode (-30% redundant checks, 10s oracle, 500 tx batch)',
+      parameter: 'AdaptiveMode',
+      oldValue: oldMode,
+      newValue: 'Eco (-30% Redundancy · 0.03 Wh/tx)',
+      timestamp,
+    });
+  } else {
+    const oldMode = state.adaptiveMode;
+    state.adaptiveMode = 'Normal';
+    state.quarantinedNodes = [];
+    state.adaptiveLog.unshift({
+      id: `adp-${Date.now()}`,
+      blockHeight: nextHeight,
+      reason: 'Consensus telemetry stabilized; restored balanced Normal SCP parameters (Peg $3.14 & 0% Riba immutable)',
+      parameter: 'AdaptiveMode',
+      oldValue: oldMode,
+      newValue: 'Normal (3 Validators · 5s Oracle)',
+      timestamp,
+    });
+  }
+
+  state.adaptiveLog = state.adaptiveLog.slice(0, 20);
+  appendAudit(
+    'Consensus',
+    'ADAPTIVE_CONSENSUS_TRANSITION',
+    'accepted',
+    state.adaptiveLog[0]?.reason || `AdaptiveConsensus switched to ${state.adaptiveMode}`,
+  );
+  res.json({ ok: true, mode: state.adaptiveMode, snapshot: buildSnapshot() });
+});
+
 // NovaHyperMind v2: 7-Mode Autonomous Failure Prevention Scan
 app.post('/api/hyper/v2/failure-scan', (_req: Request, res: Response) => {
   state.failureAutoFixes += 1;
@@ -1849,7 +1984,7 @@ app.post('/api/hyper/v2/failure-scan', (_req: Request, res: Response) => {
     'accepted',
     'Ran 7-point FailurePreventionEngine block audit: All 7 failure modes GREEN / AUTO-FIXED.',
   );
-  res.json({ ok: true, snapshot: buildSnapshot() });
+  res.json({ ok: true, autoFixesApplied: state.failureAutoFixes, snapshot: buildSnapshot() });
 });
 
 // Audit Integrity Verification & Clean Demo Reset

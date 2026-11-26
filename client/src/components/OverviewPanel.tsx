@@ -265,6 +265,60 @@ export function OverviewPanel({ snapshot, onNavigate }: OverviewPanelProps) {
         </section>
       </div>
 
+      {/* NovaHyperMind Autonomous Proof Summary Strip */}
+      <section className="rounded-xl border border-amber-500/25 bg-slate-900 px-5 py-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <div className="text-xs font-semibold text-amber-300">
+            NovaHyperMind PoUW + Anti-Plutocracy + Adaptive Consensus
+          </div>
+          <p className="text-xs text-slate-400">
+            Decentralized without PoW waste · Efficient without PoS plutocracy · Productive circular work economy
+          </p>
+        </div>
+
+        <dl className="flex flex-wrap items-center gap-6 text-xs tabular-nums">
+          <div>
+            <dt className="text-slate-400">Productive Value</dt>
+            <dd className="mt-0.5 font-semibold text-emerald-300">
+              {(snapshot.pouw?.productiveValueRatio ?? 98.4).toFixed(1)}% (&gt;95%)
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Energy / Tx</dt>
+            <dd className="mt-0.5 font-mono font-semibold text-white">
+              {snapshot.pouw?.energyPerTxWh ?? 0.04} Wh
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Gini Index</dt>
+            <dd className="mt-0.5 font-mono font-semibold text-emerald-300">
+              {(snapshot.antiPlutocracy?.giniCoefficient ?? 0.21).toFixed(2)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Consensus</dt>
+            <dd className="mt-0.5 font-semibold text-amber-300">
+              {snapshot.adaptiveConsensus?.mode ?? 'Normal'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Failure Modes</dt>
+            <dd className="mt-0.5 font-semibold text-emerald-300">
+              {snapshot.failurePrevention?.checks.length ?? 7}/7 GREEN
+            </dd>
+          </div>
+        </dl>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('hyper')}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-200 cursor-pointer whitespace-nowrap shrink-0"
+        >
+          Inspect Proof Ledger
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </section>
+
       {/* Bottom Quick-Action Subsystems Row */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 flex flex-col justify-between gap-3">
