@@ -1,6 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { AlertTriangle, Cpu, ShieldCheck, Vote } from 'lucide-react';
-import { formatUsd, type EcosystemSnapshot, type ScpBlock } from '../../../shared/novaPolicy.ts';
+import {
+  formatUsd,
+  isConstitutionalViolation,
+  type EcosystemSnapshot,
+  type ScpBlock,
+} from '../../../shared/novaPolicy.ts';
 import { preScreenCompliance } from '../lib/novaLocalEngine.ts';
 
 interface OracleScpPanelProps {
@@ -36,6 +41,7 @@ export function OracleScpPanel({
 }: OracleScpPanelProps) {
   const [inspectedBlock, setInspectedBlock] = useState<ScpBlock | null>(null);
   const proposalPreScan = preScreenCompliance(`${newProposalTitle} ${newProposalDesc}`);
+  const constitutionalCheck = isConstitutionalViolation(newProposalTitle, newProposalDesc);
 
   return (
     <div className="space-y-6">
@@ -169,10 +175,10 @@ export function OracleScpPanel({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-white">
-              1-Person = 1-Vote Community Governance Ballots
+              Quadratic Citizen Governance (1-Person = 1-KYC · Constitutional Lock)
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Every 1-KYC verified Citizen casts one equal vote. Proposals violating $3.14, Zero Riba, or Zero Gambling are blocked automatically.
+              Voting power uses sqrt(UsefulWork × Rep × 1-KYC). Proposals touching Peg $3.14, Zero Riba, or 0.01% Max Cap are auto-rejected at protocol level.
             </p>
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-300">
@@ -216,13 +222,13 @@ export function OracleScpPanel({
             {(newProposalTitle || newProposalDesc) && (
               <div
                 className={`rounded-lg border px-2.5 py-1.5 text-[11px] flex items-center gap-1.5 ${
-                  proposalPreScan.passed
+                  !constitutionalCheck.violated && proposalPreScan.passed
                     ? 'border-emerald-800/40 bg-emerald-950/20 text-emerald-300'
                     : 'border-rose-800/50 bg-rose-950/30 text-rose-200'
                 }`}
               >
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>{proposalPreScan.message}</span>
+                <span>{constitutionalCheck.violated ? constitutionalCheck.reason : proposalPreScan.message}</span>
               </div>
             )}
             <button

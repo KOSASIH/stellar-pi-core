@@ -254,6 +254,56 @@ export interface ScpBlock {
   sealedAt: string;
 }
 
+export type WorkProofType =
+  | 'Validating Halal TX'
+  | 'Oracle Check'
+  | 'HyperScanner Check'
+  | 'Citizen Storage'
+  | 'Self-Heal Task';
+
+export interface WorkProofRecord {
+  workProofId: string;
+  workType: WorkProofType;
+  nodeId: string;
+  durationMs: number;
+  resultHash: string;
+  verifierNodes: string[];
+  usefulWorkScore: number;
+  wealthConcentrationFactor: number;
+  rewardNvc: number;
+  energyWh: number;
+  timestamp: string;
+}
+
+export interface UsefulWorkTask {
+  id: string;
+  workType: WorkProofType;
+  requesterId: string;
+  title: string;
+  offeredRewardNvc: number;
+  status: 'open' | 'completed';
+  completedBy?: string;
+  workProofId?: string;
+}
+
+export interface AdaptiveLogItem {
+  id: string;
+  blockHeight: number;
+  reason: string;
+  parameter: string;
+  oldValue: string;
+  newValue: string;
+  timestamp: string;
+}
+
+export interface FailureModeStatus {
+  id: string;
+  name: string;
+  status: 'GREEN / AUTO-FIXED';
+  fixCount: number;
+  lastAction: string;
+}
+
 export interface EcosystemSnapshot {
   constants: typeof NovaPolicy;
   mainnetLaunched: boolean;
@@ -298,5 +348,112 @@ export interface EcosystemSnapshot {
   marketplaceListings: MarketplaceListing[];
   marketplaceOrders: MarketplaceOrder[];
   scpBlocks: ScpBlock[];
+  pouw?: {
+    totalUsefulWorkDone: number;
+    energyPerTxWh: number;
+    productiveValueRatio: number;
+    mintingPaused: boolean;
+    workProofs: WorkProofRecord[];
+    workMarketplace: UsefulWorkTask[];
+  };
+  antiPlutocracy?: {
+    giniCoefficient: number;
+    top10ControlPercent: number;
+    rewardFairnessScore: number;
+    constitutionalRulesLocked: boolean;
+  };
+  adaptiveConsensus?: {
+    mode: 'Normal' | 'Defensive' | 'Eco';
+    healthyStreakBlocks: number;
+    validatorRedundancy: number;
+    oracleCheckFreqSec: number;
+    maxTxBatchSize: number;
+    quarantinedNodes: string[];
+    adaptiveLog: AdaptiveLogItem[];
+  };
+  failurePrevention?: {
+    totalAutoFixes: number;
+    checks: FailureModeStatus[];
+  };
 }
+
+// NovaHyperMind v2 Core Math Helpers (Mirrors C++ core engines in src/core/)
+export function computeWealthConcentrationFactor(walletHoldingNvc: number): number {
+  const clamped = Math.max(0, Math.min(NovaPolicy.maxWalletHoldingNvc, walletHoldingNvc));
+  const ratio = clamped / NovaPolicy.maxWalletHoldingNvc;
+  return Number((1 + 19 * Math.pow(ratio, 1.25)).toFixed(4));
+}
+
+export function computePouwRewardNvc(params: {
+  usefulWorkScore: number;
+  uptimeRatio: number;
+  purityScore: number;
+  walletHoldingNvc: number;
+}): { rewardNvc: number; wealthConcentrationFactor: number; multiplier: number } {
+  const wealthFactor = computeWealthConcentrationFactor(params.walletHoldingNvc);
+  if (params.walletHoldingNvc >= NovaPolicy.maxWalletHoldingNvc) {
+    return { rewardNvc: 0, wealthConcentrationFactor: wealthFactor, multiplier: 0 };
+  }
+  const raw =
+    (Math.max(0, params.usefulWorkScore) *
+      Math.max(0, Math.min(1, params.uptimeRatio)) *
+      Math.max(0, Math.min(1, params.purityScore))) /
+    wealthFactor;
+  const scaled = Math.round((raw / 100) * 1_000_000) / 1_000_000;
+  const maxRemaining = Math.max(0, NovaPolicy.maxWalletHoldingNvc - params.walletHoldingNvc);
+  return {
+    rewardNvc: Math.min(scaled, maxRemaining),
+    wealthConcentrationFactor: wealthFactor,
+    multiplier: Number((1 / wealthFactor).toFixed(4)),
+  };
+}
+
+export function computeQuadraticVotingPower(params: {
+  usefulWorkScore: number;
+  reputationScore: number;
+  hasKyc: boolean;
+}): number {
+  if (!params.hasKyc || params.usefulWorkScore <= 0 || params.reputationScore <= 0) {
+    return 0;
+  }
+  return Number(Math.sqrt(params.usefulWorkScore * params.reputationScore * 1).toFixed(2));
+}
+
+export function isConstitutionalViolation(title: string, description: string): {
+  violated: boolean;
+  reason: string;
+} {
+  const text = `${title} ${description}`.toLowerCase();
+  const touchesPeg =
+    (text.includes('peg') || text.includes('3.14') || text.includes('3.20')) &&
+    (text.includes('change') ||
+      text.includes('remove') ||
+      text.includes('float') ||
+      text.includes('depeg') ||
+      text.includes('slippage') ||
+      text.includes('3.20'));
+
+  const touchesRiba =
+    (text.includes('interest') || text.includes('riba') || text.includes('apy') || text.includes('apr')) &&
+    !text.includes('0% interest') &&
+    !text.includes('zero interest') &&
+    !text.includes('riba-free');
+
+  const touchesCap =
+    (text.includes('wallet cap') ||
+      text.includes('10m') ||
+      text.includes('10,000,000') ||
+      text.includes('0.01%')) &&
+    (text.includes('raise') || text.includes('remove') || text.includes('unlimited') || text.includes('bypass'));
+
+  if (touchesPeg || touchesRiba || touchesCap) {
+    return {
+      violated: true,
+      reason:
+        'Constitutional Rule Auto-Reject: Fixed Peg $3.14, RibaGuard 0% Interest, and Max Wallet Cap 0.01% (10M NVC) are non-votable immutable protocol laws.',
+    };
+  }
+  return { violated: false, reason: 'Constitutional Rules preserved.' };
+}
+
 

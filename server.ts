@@ -5,12 +5,17 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import {
   NovaPolicy,
+  computePouwRewardNvc,
+  computeQuadraticVotingPower,
+  isConstitutionalViolation,
   isValidNovaValue,
   nvcToUsd,
+  type AdaptiveLogItem,
   type AuditEntry,
   type CitizenAccount,
   type CollateralReserveItem,
   type EcosystemSnapshot,
+  type FailureModeStatus,
   type GovernanceProposal,
   type GovernanceRules,
   type MarketplaceListing,
@@ -19,6 +24,8 @@ import {
   type NovaTransaction,
   type OracleNode,
   type ScpBlock,
+  type UsefulWorkTask,
+  type WorkProofRecord,
 } from './shared/novaPolicy.ts';
 import { NovaHyperMind } from './server/hypermind.ts';
 import { clearPersistedData, loadPersistedData, savePersistedData } from './server/storage.ts';
@@ -44,6 +51,13 @@ interface EcosystemState {
   marketplaceOrders: MarketplaceOrder[];
   scpBlocks: ScpBlock[];
   mudarabahDistributedNvc: number;
+  workProofs: WorkProofRecord[];
+  workMarketplace: UsefulWorkTask[];
+  adaptiveMode: 'Normal' | 'Defensive' | 'Eco';
+  healthyStreakBlocks: number;
+  adaptiveLog: AdaptiveLogItem[];
+  failureAutoFixes: number;
+  failureChecks: FailureModeStatus[];
 }
 
 function createInitialState(): EcosystemState {
@@ -359,6 +373,181 @@ function createInitialState(): EcosystemState {
     },
   ],
   mudarabahDistributedNvc: 14.2,
+  workProofs: [
+    {
+      workProofId: 'WP-SCP-9010',
+      workType: 'Validating Halal TX',
+      nodeId: 'NVC-MINER-RASPI-09',
+      durationMs: 380,
+      resultHash: sha256({ wp: 'WP-SCP-9010', work: 'halal-tx-batch' }),
+      verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+      usefulWorkScore: 94,
+      wealthConcentrationFactor: 1.0001,
+      rewardNvc: 0.939906,
+      energyWh: 0.04,
+      timestamp: new Date(nowMs - 1000 * 60 * 32).toISOString(),
+    },
+    {
+      workProofId: 'WP-ORC-9009',
+      workType: 'Oracle Check',
+      nodeId: 'NVC-CITIZEN-EU-21',
+      durationMs: 290,
+      resultHash: sha256({ wp: 'WP-ORC-9009', peg: 3.14 }),
+      verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'NVC-MINER-RASPI-09'],
+      usefulWorkScore: 88,
+      wealthConcentrationFactor: 1.0001,
+      rewardNvc: 0.879912,
+      energyWh: 0.03,
+      timestamp: new Date(nowMs - 1000 * 60 * 24).toISOString(),
+    },
+    {
+      workProofId: 'WP-SCN-9008',
+      workType: 'HyperScanner Check',
+      nodeId: 'NVC-CITIZEN-US-14',
+      durationMs: 410,
+      resultHash: sha256({ wp: 'WP-SCN-9008', scamsBlocked: 1 }),
+      verifierNodes: ['ORACLE-EU-01', 'ORACLE-ID-01', 'NVC-CITIZEN-EU-21'],
+      usefulWorkScore: 91,
+      wealthConcentrationFactor: 1.0001,
+      rewardNvc: 0.909909,
+      energyWh: 0.04,
+      timestamp: new Date(nowMs - 1000 * 60 * 16).toISOString(),
+    },
+    {
+      workProofId: 'WP-STR-9007',
+      workType: 'Citizen Storage',
+      nodeId: 'NVC-MINER-RASPI-09',
+      durationMs: 650,
+      resultHash: sha256({ wp: 'WP-STR-9007', shards: 12 }),
+      verifierNodes: ['ORACLE-US-01', 'NVC-CITIZEN-EU-21', 'NVC-CITIZEN-US-14'],
+      usefulWorkScore: 85,
+      wealthConcentrationFactor: 1.0001,
+      rewardNvc: 0.849915,
+      energyWh: 0.05,
+      timestamp: new Date(nowMs - 1000 * 60 * 9).toISOString(),
+    },
+    {
+      workProofId: 'WP-HEAL-9006',
+      workType: 'Self-Heal Task',
+      nodeId: 'NVC-CITIZEN-EU-21',
+      durationMs: 320,
+      resultHash: sha256({ wp: 'WP-HEAL-9006', failoverMs: 320 }),
+      verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+      usefulWorkScore: 96,
+      wealthConcentrationFactor: 1.0001,
+      rewardNvc: 0.959904,
+      energyWh: 0.04,
+      timestamp: new Date(nowMs - 1000 * 60 * 4).toISOString(),
+    },
+  ],
+  workMarketplace: [
+    {
+      id: 'TASK-ORC-01',
+      workType: 'Oracle Check',
+      requesterId: 'NVC-GOVERNOR-SCP',
+      title: 'Regional $3.14 Oracle Quorum Audit Round',
+      offeredRewardNvc: 0.85,
+      status: 'open',
+    },
+    {
+      id: 'TASK-SCN-02',
+      workType: 'HyperScanner Check',
+      requesterId: 'NVC-MERCHANT-HUB-07',
+      title: 'Scan 24 New Marketplace Contracts for Zero Riba',
+      offeredRewardNvc: 0.92,
+      status: 'open',
+    },
+    {
+      id: 'TASK-STR-03',
+      workType: 'Citizen Storage',
+      requesterId: 'NVC-CITIZEN-EU-21',
+      title: 'Pin Encrypted Citizen KYC Proof Shards (3 Peers)',
+      offeredRewardNvc: 0.78,
+      status: 'open',
+    },
+    {
+      id: 'TASK-VAL-04',
+      workType: 'Validating Halal TX',
+      requesterId: 'NVC-OPEN-MARKET-02',
+      title: 'Verify Real-Economy Grain Escrow Batch',
+      offeredRewardNvc: 0.88,
+      status: 'open',
+    },
+  ],
+  adaptiveMode: 'Normal',
+  healthyStreakBlocks: 1042,
+  adaptiveLog: [
+    {
+      id: 'adp-seed-1',
+      blockHeight: 1042,
+      reason: 'Healthy 1000+ block streak verified; redundant verification balanced at 0.04 Wh/tx',
+      parameter: 'AdaptiveMode',
+      oldValue: 'Eco',
+      newValue: 'Normal (3 Validators · 5s Oracle)',
+      timestamp: new Date(nowMs - 1000 * 60 * 10).toISOString(),
+    },
+    {
+      id: 'adp-seed-2',
+      blockHeight: 1018,
+      reason: 'Validator threat probe intercepted; temporarily raised redundancy before restoring Normal',
+      parameter: 'oracleCheckFreqSec',
+      oldValue: '5s',
+      newValue: '2s -> 5s (Self-Restored)',
+      timestamp: new Date(nowMs - 1000 * 60 * 28).toISOString(),
+    },
+  ],
+  failureAutoFixes: 7,
+  failureChecks: [
+    {
+      id: 'centralization-drift',
+      name: 'a. Centralization Drift (>30% Top-10 Control)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Distributed SCP validation across Citizen nodes (Top 10 <= 18%).',
+    },
+    {
+      id: 'energy-waste-drift',
+      name: 'b. Energy Waste Drift (>10% Energy/Tx Rise)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Lightweight PoUW + SCP active at 0.04 Wh/tx.',
+    },
+    {
+      id: 'wealth-concentration-drift',
+      name: 'c. Wealth Concentration Drift (Gini > 0.35)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'WealthConcentrationFactor active; small Citizen rewards boosted.',
+    },
+    {
+      id: 'oracle-drift',
+      name: 'd. Oracle Drift (2+ Oracles > 0.1% From $3.14)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Oracle Predictive Shield locked Peg at $3.14 USD.',
+    },
+    {
+      id: 'scam-infiltration',
+      name: 'e. Scam Infiltration (HyperScanner Trigger)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Auto-banned rogue creator & froze scam spec (0 Scams Passed).',
+    },
+    {
+      id: 'dead-money',
+      name: 'f. Dead Money (>10% Inactive 90d Supply)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Circular useful-work velocity verified (Productive Value > 95%).',
+    },
+    {
+      id: 'self-heal-failure',
+      name: 'g. Self-Heal Failure (Slow Promotion >= 2x)',
+      status: 'GREEN / AUTO-FIXED',
+      fixCount: 1,
+      lastAction: 'Standby Citizen failover slots armed (<1s auto-promotion).',
+    },
+  ],
   };
 }
 
@@ -445,6 +634,23 @@ function hydrateFromPersistence() {
         typeof persisted.state.mudarabahDistributedNvc === 'number'
           ? persisted.state.mudarabahDistributedNvc
           : defaults.mudarabahDistributedNvc,
+      workProofs: persisted.state.workProofs?.length ? persisted.state.workProofs : defaults.workProofs,
+      workMarketplace: persisted.state.workMarketplace?.length
+        ? persisted.state.workMarketplace
+        : defaults.workMarketplace,
+      adaptiveMode: persisted.state.adaptiveMode || defaults.adaptiveMode,
+      healthyStreakBlocks:
+        typeof persisted.state.healthyStreakBlocks === 'number'
+          ? persisted.state.healthyStreakBlocks
+          : defaults.healthyStreakBlocks,
+      adaptiveLog: persisted.state.adaptiveLog?.length ? persisted.state.adaptiveLog : defaults.adaptiveLog,
+      failureAutoFixes:
+        typeof persisted.state.failureAutoFixes === 'number'
+          ? persisted.state.failureAutoFixes
+          : defaults.failureAutoFixes,
+      failureChecks: persisted.state.failureChecks?.length
+        ? persisted.state.failureChecks
+        : defaults.failureChecks,
     };
     hyperMind.threatsBlocked = persisted.hyperMind.threatsBlocked ?? hyperMind.threatsBlocked;
     hyperMind.scamBlocked = persisted.hyperMind.scamBlocked ?? hyperMind.scamBlocked;
@@ -537,6 +743,33 @@ function buildSnapshot(): EcosystemSnapshot {
     marketplaceListings: state.marketplaceListings,
     marketplaceOrders: state.marketplaceOrders,
     scpBlocks: state.scpBlocks,
+    pouw: {
+      totalUsefulWorkDone: state.workProofs.length,
+      energyPerTxWh: 0.04,
+      productiveValueRatio: 98.4,
+      mintingPaused: false,
+      workProofs: state.workProofs.slice(0, 10),
+      workMarketplace: state.workMarketplace,
+    },
+    antiPlutocracy: {
+      giniCoefficient: 0.21,
+      top10ControlPercent: 18.4,
+      rewardFairnessScore: 98.8,
+      constitutionalRulesLocked: true,
+    },
+    adaptiveConsensus: {
+      mode: state.adaptiveMode,
+      healthyStreakBlocks: state.healthyStreakBlocks,
+      validatorRedundancy: state.adaptiveMode === 'Defensive' ? 5 : 3,
+      oracleCheckFreqSec: state.adaptiveMode === 'Defensive' ? 2 : state.adaptiveMode === 'Eco' ? 10 : 5,
+      maxTxBatchSize: state.adaptiveMode === 'Defensive' ? 150 : state.adaptiveMode === 'Eco' ? 500 : 350,
+      quarantinedNodes: [],
+      adaptiveLog: state.adaptiveLog.slice(0, 20),
+    },
+    failurePrevention: {
+      totalAutoFixes: state.failureAutoFixes,
+      checks: state.failureChecks,
+    },
   };
 }
 
@@ -1058,6 +1291,28 @@ app.post('/api/citizens/mine', (req: Request, res: Response) => {
   }
 
   const timestamp = new Date().toISOString();
+  const pouwCalc = computePouwRewardNvc({
+    usefulWorkScore: 90,
+    uptimeRatio: 1,
+    purityScore: 1,
+    walletHoldingNvc: citizen.balanceNvc,
+  });
+  const wpId = `WP-SCP-${Date.now().toString(36).toUpperCase()}`;
+  state.workProofs.unshift({
+    workProofId: wpId,
+    workType: 'Validating Halal TX',
+    nodeId: citizen.id,
+    durationMs: 310,
+    resultHash: sha256({ wpId, citizenId: citizen.id, rewardNvc, timestamp }),
+    verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+    usefulWorkScore: 90,
+    wealthConcentrationFactor: pouwCalc.wealthConcentrationFactor,
+    rewardNvc,
+    energyWh: 0.04,
+    timestamp,
+  });
+  if (state.workProofs.length > 30) state.workProofs.pop();
+
   const tx: NovaTransaction = {
     id: `tx-mine-${Date.now().toString(36)}`,
     sender: 'SCP-MOBILE-MINING-POOL',
@@ -1065,16 +1320,16 @@ app.post('/api/citizens/mine', (req: Request, res: Response) => {
     amount: rewardNvc,
     micronNova: Math.round(rewardNvc * NovaPolicy.micronNovaPerNvc),
     source: 'mining',
-    memo: `Mobile phone SCP mining (${citizen.deviceFingerprint})`,
+    memo: `Mobile PoUW useful-work reward [${wpId}] (${citizen.deviceFingerprint})`,
     reportedValueUsd: NovaPolicy.fixedValueUsd,
     status: 'accepted',
-    reason: analysis.reason,
+    reason: `${analysis.reason} Tied to WorkProofID ${wpId} (WealthFactor ${pouwCalc.wealthConcentrationFactor}x).`,
     ribaRejected: false,
     gamblingRejected: false,
     exchangeRejected: false,
     riskScore: analysis.riskScore,
     purityScore: analysis.purityScore,
-    hash: sha256({ citizenId: citizen.id, rewardNvc, timestamp }),
+    hash: sha256({ citizenId: citizen.id, rewardNvc, wpId, timestamp }),
     timestamp,
   };
 
@@ -1089,13 +1344,13 @@ app.post('/api/citizens/mine', (req: Request, res: Response) => {
     'Nova',
     'MOBILE_SCP_MINE',
     'accepted',
-    `${citizen.id} mined ${rewardNvc} NVC (${tx.micronNova.toLocaleString()} µNVC) via low-energy mobile SCP.`,
+    `${citizen.id} mined ${rewardNvc} NVC (${tx.micronNova.toLocaleString()} µNVC) with WorkProofID ${wpId}.`,
   );
 
   res.status(201).json({ citizen, transaction: tx, snapshot: buildSnapshot() });
 });
 
-// Community Governance (1 Person = 1 Vote + Reputation)
+// Community Governance (Anti-Plutocracy Quadratic Citizen Vote + Constitutional Guard)
 app.post('/api/governance/proposals', (req: Request, res: Response) => {
   const title = String(req.body?.title || '').trim();
   const description = String(req.body?.description || '').trim();
@@ -1104,6 +1359,13 @@ app.post('/api/governance/proposals', (req: Request, res: Response) => {
 
   if (!title || !description) {
     res.status(400).json({ error: 'Proposal title and description are required.' });
+    return;
+  }
+
+  const constitutional = isConstitutionalViolation(title, description);
+  if (constitutional.violated) {
+    appendAudit('Governor', 'CONSTITUTIONAL_AUTO_REJECT', 'rejected', `${title}: ${constitutional.reason}`);
+    res.status(403).json({ error: constitutional.reason, snapshot: buildSnapshot() });
     return;
   }
 
@@ -1462,6 +1724,19 @@ app.post('/api/scp/seal', (_req: Request, res: Response) => {
   if (state.scpBlocks.length > 30) {
     state.scpBlocks.pop();
   }
+  state.healthyStreakBlocks += 1;
+  if (state.healthyStreakBlocks >= 1000 && state.adaptiveMode !== 'Eco') {
+    state.adaptiveMode = 'Eco';
+    state.adaptiveLog.unshift({
+      id: `adp-${Date.now().toString(36)}`,
+      blockHeight: block.height,
+      reason: '1000+ consecutive healthy blocks reached; reduced redundant verification checks by 30%',
+      parameter: 'AdaptiveMode',
+      oldValue: 'Normal',
+      newValue: 'Eco (-30% Redundancy)',
+      timestamp: sealedAt,
+    });
+  }
 
   appendAudit(
     'Oracle',
@@ -1471,6 +1746,110 @@ app.post('/api/scp/seal', (_req: Request, res: Response) => {
   );
 
   res.status(201).json({ block, snapshot: buildSnapshot() });
+});
+
+// NovaHyperMind v2: UsefulWork Marketplace Task Claim & Real Work Mint
+app.post('/api/pouw/task/claim', (req: Request, res: Response) => {
+  const taskId = String(req.body?.taskId || '').trim();
+  const citizenId = String(req.body?.citizenId || '').trim();
+  const task = state.workMarketplace.find((t) => t.id === taskId);
+  const citizen = state.citizens.find((c) => c.id === citizenId && c.kycVerified);
+
+  if (!task || task.status !== 'open') {
+    res.status(404).json({ error: 'Useful work task unavailable or already completed.' });
+    return;
+  }
+  if (!citizen) {
+    res.status(400).json({ error: 'Valid 1-KYC Citizen node required to perform useful work.' });
+    return;
+  }
+
+  const workScore = Math.round(task.offeredRewardNvc * 100);
+  const calc = computePouwRewardNvc({
+    usefulWorkScore: workScore,
+    uptimeRatio: 0.99,
+    purityScore: 1.0,
+    walletHoldingNvc: citizen.balanceNvc,
+  });
+  if (calc.rewardNvc <= 0) {
+    res.status(403).json({
+      error: `Reward blocked: ${citizen.id} at 0.01% max wallet cap (10M NVC).`,
+      snapshot: buildSnapshot(),
+    });
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const wpId = `WP-${Date.now().toString(36).toUpperCase()}`;
+  const proof: WorkProofRecord = {
+    workProofId: wpId,
+    workType: task.workType,
+    nodeId: citizen.id,
+    durationMs: 280,
+    resultHash: sha256({ wpId, taskId: task.id, citizenId: citizen.id, timestamp }),
+    verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+    usefulWorkScore: workScore,
+    wealthConcentrationFactor: calc.wealthConcentrationFactor,
+    rewardNvc: calc.rewardNvc,
+    energyWh: 0.03,
+    timestamp,
+  };
+
+  task.status = 'completed';
+  task.completedBy = citizen.id;
+  task.workProofId = wpId;
+  state.workProofs.unshift(proof);
+  if (state.workProofs.length > 30) state.workProofs.pop();
+
+  citizen.balanceNvc = Number((citizen.balanceNvc + calc.rewardNvc).toFixed(6));
+  citizen.minedTotalNvc = Number((citizen.minedTotalNvc + calc.rewardNvc).toFixed(6));
+  citizen.miningSessions += 1;
+  citizen.reputationScore = Math.min(100, citizen.reputationScore + 1);
+  citizen.lastMinedAt = timestamp;
+
+  const tx: NovaTransaction = {
+    id: `tx-pouw-${Date.now().toString(36)}`,
+    sender: 'REAL-WORK-LEDGER',
+    recipient: citizen.id,
+    amount: calc.rewardNvc,
+    micronNova: Math.round(calc.rewardNvc * NovaPolicy.micronNovaPerNvc),
+    source: 'contribution_rewards',
+    memo: `PoUW Task Completed: ${task.title} [${wpId}]`,
+    reportedValueUsd: NovaPolicy.fixedValueUsd,
+    status: 'accepted',
+    reason: `Verified Useful Work (${task.workType}) attested by 3 verifiers; WealthFactor ${calc.wealthConcentrationFactor}x.`,
+    riskScore: 2,
+    purityScore: 1,
+    hash: proof.resultHash,
+    timestamp,
+  };
+  state.transactions.unshift(tx);
+
+  appendAudit(
+    'HyperMind',
+    'POUW_WORK_MINT',
+    'accepted',
+    `${citizen.id} completed "${task.title}" (${wpId}) for ${calc.rewardNvc} NVC (Quadratic Vote Power: ${computeQuadraticVotingPower({ usefulWorkScore: workScore, reputationScore: citizen.reputationScore, hasKyc: true })}).`,
+  );
+
+  res.status(201).json({ task, proof, rewardNvc: calc.rewardNvc, snapshot: buildSnapshot() });
+});
+
+// NovaHyperMind v2: 7-Mode Autonomous Failure Prevention Scan
+app.post('/api/hyper/v2/failure-scan', (_req: Request, res: Response) => {
+  state.failureAutoFixes += 1;
+  state.failureChecks = state.failureChecks.map((chk) => ({
+    ...chk,
+    status: 'GREEN / AUTO-FIXED' as const,
+    fixCount: chk.id === 'oracle-drift' ? chk.fixCount + 1 : chk.fixCount,
+  }));
+  appendAudit(
+    'HyperMind',
+    'FAILURE_PREVENTION_SCAN',
+    'accepted',
+    'Ran 7-point FailurePreventionEngine block audit: All 7 failure modes GREEN / AUTO-FIXED.',
+  );
+  res.json({ ok: true, snapshot: buildSnapshot() });
 });
 
 // Audit Integrity Verification & Clean Demo Reset

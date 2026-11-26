@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type {
+  AdaptiveLogItem,
   AuditEntry,
   CitizenAccount,
   CollateralReserveItem,
+  FailureModeStatus,
   GovernanceProposal,
   GovernanceRules,
   HyperMindLogEntry,
@@ -14,6 +16,8 @@ import type {
   NovaTransaction,
   OracleNode,
   ScpBlock,
+  UsefulWorkTask,
+  WorkProofRecord,
 } from '../shared/novaPolicy.ts';
 
 export interface PersistedEcosystemData {
@@ -36,6 +40,13 @@ export interface PersistedEcosystemData {
     marketplaceOrders: MarketplaceOrder[];
     scpBlocks?: ScpBlock[];
     mudarabahDistributedNvc?: number;
+    workProofs?: WorkProofRecord[];
+    workMarketplace?: UsefulWorkTask[];
+    adaptiveMode?: 'Normal' | 'Defensive' | 'Eco';
+    healthyStreakBlocks?: number;
+    adaptiveLog?: AdaptiveLogItem[];
+    failureAutoFixes?: number;
+    failureChecks?: FailureModeStatus[];
   };
   hyperMind: {
     threatsBlocked: number;

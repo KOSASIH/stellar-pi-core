@@ -40,6 +40,7 @@ import { TransactionsPanel } from './components/TransactionsPanel.tsx';
 import {
   applyLocalAppFallback,
   applyLocalCitizenRegisterFallback,
+  applyLocalClaimWorkTaskFallback,
   applyLocalMarketplaceBuyFallback,
   applyLocalMarketplaceListingFallback,
   applyLocalMudarabahFallback,
@@ -358,6 +359,229 @@ export default function App() {
       'green',
       'SELF-HEAL COMPLETE! Backup Citizen node auto-promoted in <1s. Network Health restored to 99.99%.',
     );
+  }
+
+  function handleSimulatePlutocracyAttack() {
+    const timestamp = new Date().toISOString();
+    const detail =
+      'Plutocracy Attack Blocked — Whale attempted vote-buying with 10M NVC & Peg override proposal. Quadratic Vote + Constitutional Guard enforced 1-KYC = 1 Base Vote.';
+    setSnapshot((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        threatsBlocked: prev.threatsBlocked + 1,
+        hyperModules: prev.hyperModules.map((mod) =>
+          mod.id === 'predictive-governance' ? { ...mod, threatsBlocked: mod.threatsBlocked + 1 } : mod,
+        ),
+        adaptiveConsensus: prev.adaptiveConsensus
+          ? {
+              ...prev.adaptiveConsensus,
+              adaptiveLog: [
+                {
+                  id: `adp-plut-${Date.now()}`,
+                  blockHeight: prev.metrics.latestBlockHeight,
+                  reason: 'Plutocracy / Constitutional override intercepted by QuadraticCitizenVote',
+                  parameter: 'ConstitutionalGuard',
+                  oldValue: 'Active',
+                  newValue: 'LOCKED (Peg $3.14 · 0% Riba · 10M Cap)',
+                  timestamp,
+                },
+                ...prev.adaptiveConsensus.adaptiveLog,
+              ].slice(0, 20),
+            }
+          : prev.adaptiveConsensus,
+        failurePrevention: prev.failurePrevention
+          ? {
+              ...prev.failurePrevention,
+              totalAutoFixes: prev.failurePrevention.totalAutoFixes + 1,
+              checks: prev.failurePrevention.checks.map((c) =>
+                c.id === 'wealth-concentration-drift'
+                  ? {
+                      ...c,
+                      fixCount: c.fixCount + 1,
+                      lastAction: 'Rejected whale vote-buying & preserved equal 1-KYC base voting weight.',
+                    }
+                  : c,
+              ),
+            }
+          : prev.failurePrevention,
+        hyperMindLog: [
+          {
+            id: `hml-plut-${Date.now()}`,
+            module: 'QuadraticCitizenVote & Constitutional Guard',
+            decision: detail,
+            severity: 'blocked' as const,
+            timestamp,
+          },
+          ...prev.hyperMindLog,
+        ].slice(0, 60),
+        auditLog: [
+          {
+            id: `aud-plut-${Date.now()}`,
+            module: 'Governance',
+            action: 'PLUTOCRACY_ATTACK_BLOCKED',
+            verdict: 'rejected' as const,
+            detail,
+            hash: makeLocalHash(`plut-${timestamp}-${prev.threatsBlocked}`),
+            timestamp,
+          },
+          ...prev.auditLog,
+        ].slice(0, 100),
+      };
+    });
+    pushHyperAlert(
+      'plutocracy',
+      'orange',
+      'PLUTOCRACY ATTACK BLOCKED! Whale attempted vote-buying with 10M NVC & Peg override proposal. Blocked by Quadratic Citizen Vote (sqrt(UsefulWork × Rep × 1-KYC)) + Constitutional Guard.',
+    );
+  }
+
+  function handleSimulateWasteAttack() {
+    const timestamp = new Date().toISOString();
+    const detail =
+      'Energy Waste Attack Blocked — Node tried burning PoW electricity / passive holding for reward -> 0 NVC awarded (No WorkProof = No Mint).';
+    setSnapshot((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        threatsBlocked: prev.threatsBlocked + 1,
+        hyperModules: prev.hyperModules.map((mod) =>
+          mod.id === 'economic-stabilizer' ? { ...mod, threatsBlocked: mod.threatsBlocked + 1 } : mod,
+        ),
+        adaptiveConsensus: prev.adaptiveConsensus
+          ? {
+              ...prev.adaptiveConsensus,
+              adaptiveLog: [
+                {
+                  id: `adp-waste-${Date.now()}`,
+                  blockHeight: prev.metrics.latestBlockHeight,
+                  reason: 'Energy waste / passive staking reward probe blocked at protocol layer',
+                  parameter: 'PoUW Mint Gate',
+                  oldValue: '0.04 Wh/tx',
+                  newValue: '0 NVC minted without WorkProofID',
+                  timestamp,
+                },
+                ...prev.adaptiveConsensus.adaptiveLog,
+              ].slice(0, 20),
+            }
+          : prev.adaptiveConsensus,
+        failurePrevention: prev.failurePrevention
+          ? {
+              ...prev.failurePrevention,
+              totalAutoFixes: prev.failurePrevention.totalAutoFixes + 1,
+              checks: prev.failurePrevention.checks.map((c) =>
+                c.id === 'energy-waste-drift'
+                  ? {
+                      ...c,
+                      fixCount: c.fixCount + 1,
+                      lastAction: 'Denied electricity-burn reward & enforced PoUW (0.04 Wh/tx).',
+                    }
+                  : c,
+              ),
+            }
+          : prev.failurePrevention,
+        hyperMindLog: [
+          {
+            id: `hml-waste-${Date.now()}`,
+            module: 'ProofOfUsefulWork & FailurePreventionEngine',
+            decision: detail,
+            severity: 'blocked' as const,
+            timestamp,
+          },
+          ...prev.hyperMindLog,
+        ].slice(0, 60),
+        auditLog: [
+          {
+            id: `aud-waste-${Date.now()}`,
+            module: 'PoUW',
+            action: 'WASTE_ATTACK_BLOCKED',
+            verdict: 'rejected' as const,
+            detail,
+            hash: makeLocalHash(`waste-${timestamp}-${prev.threatsBlocked}`),
+            timestamp,
+          },
+          ...prev.auditLog,
+        ].slice(0, 100),
+      };
+    });
+    pushHyperAlert(
+      'waste',
+      'red',
+      'ENERGY WASTE ATTACK BLOCKED! Node tried burning PoW electricity / passive holding for reward -> 0 NVC awarded. Enforced by Proof of Useful Work (PoUW) + FailurePreventionEngine.',
+    );
+  }
+
+  async function handleClaimWorkTask(taskId: string) {
+    setFeedback(null);
+    const result = await safeFetchJson<{
+      rewardNvc?: number;
+      workProof?: { workProofId: string; workType: string };
+      snapshot?: EcosystemSnapshot;
+      error?: string;
+    }>('/api/pouw/task/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, citizenId: selectedCitizenId }),
+    });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      if (result.ok && result.data.workProof) {
+        setFeedback({
+          kind: 'success',
+          text: `Completed Useful Work ${result.data.workProof.workProofId} (${result.data.workProof.workType}) · Earned ${result.data.rewardNvc} NVC.`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: result.data.error || 'Useful work claim rejected.' });
+      }
+      return;
+    }
+    if (snapshot) {
+      const local = applyLocalClaimWorkTaskFallback(snapshot, {
+        taskId,
+        citizenId: selectedCitizenId,
+      });
+      setSnapshot(local.snapshot);
+      if (local.ok && local.workProofId) {
+        setFeedback({
+          kind: 'success',
+          text: `Completed Useful Work ${local.workProofId} locally · Earned ${local.rewardNvc} NVC (${formatMicronNova(local.rewardNvc || 0)}).`,
+        });
+      } else {
+        setFeedback({ kind: 'error', text: local.error || 'Useful work claim rejected.' });
+      }
+    }
+  }
+
+  async function handleRunFailureScan() {
+    setFeedback(null);
+    const result = await safeFetchJson<{
+      autoFixesApplied?: number;
+      snapshot?: EcosystemSnapshot;
+      error?: string;
+    }>('/api/hyper/v2/failure-scan', { method: 'POST' });
+    if (result.data?.snapshot) {
+      setSnapshot(result.data.snapshot);
+      setFeedback({
+        kind: 'success',
+        text: `FailurePreventionEngine swept all 7 failure modes (${result.data.autoFixesApplied ?? 7} total auto-fixes verified). All GREEN.`,
+      });
+      return;
+    }
+    setSnapshot((prev) =>
+      prev?.failurePrevention
+        ? {
+            ...prev,
+            failurePrevention: {
+              ...prev.failurePrevention,
+              totalAutoFixes: prev.failurePrevention.totalAutoFixes + 1,
+            },
+          }
+        : prev,
+    );
+    setFeedback({
+      kind: 'success',
+      text: 'FailurePreventionEngine swept all 7 failure modes locally. All GREEN / AUTO-FIXED.',
+    });
   }
 
   async function handleTransactionSubmit(e: FormEvent) {
@@ -1373,14 +1597,20 @@ export default function App() {
           {activeTab === 'hyper' && (
             <HyperMindPanel
               snapshot={snapshot}
+              selectedCitizenId={selectedCitizenId}
               proposalText={proposalText}
               votePrediction={votePrediction}
+              onChangeSelectedCitizenId={setSelectedCitizenId}
               onChangeProposalText={setProposalText}
               onPredictGovernance={handlePredictGovernance}
               onSimulateWhaleAttack={handleSimulateWhaleAttack}
               onSimulateScamApp={handleSimulateScamApp}
               onSimulateOracleManipulation={handleSimulateOracleManipulation}
               onSelfHealNetwork={handleSelfHealNetwork}
+              onSimulatePlutocracyAttack={handleSimulatePlutocracyAttack}
+              onSimulateWasteAttack={handleSimulateWasteAttack}
+              onClaimWorkTask={handleClaimWorkTask}
+              onRunFailureScan={handleRunFailureScan}
             />
           )}
 

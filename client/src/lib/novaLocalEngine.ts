@@ -1,13 +1,16 @@
 import {
   NovaPolicy,
+  computePouwRewardNvc,
+  isConstitutionalViolation,
   isValidNovaValue,
   nvcToUsd,
   type EcosystemSnapshot,
   type NovaAppRecord,
   type NovaTransaction,
+  type WorkProofRecord,
 } from '../../../shared/novaPolicy.ts';
 
-export type HyperAlertKey = 'whale' | 'scam' | 'oracle' | 'self-heal';
+export type HyperAlertKey = 'whale' | 'scam' | 'oracle' | 'self-heal' | 'plutocracy' | 'waste';
 export type HyperAlertColor = 'red' | 'orange' | 'blue' | 'green';
 
 export interface HyperAlertItem {
@@ -586,6 +589,201 @@ export function createLocalFallbackSnapshot(): EcosystemSnapshot {
         sealedAt: iso(1000 * 60 * 10),
       },
     ],
+    pouw: {
+      totalUsefulWorkDone: 5,
+      energyPerTxWh: 0.04,
+      productiveValueRatio: 98.4,
+      mintingPaused: false,
+      workProofs: [
+        {
+          workProofId: 'WP-SCP-9010',
+          workType: 'Validating Halal TX',
+          nodeId: 'NVC-MINER-RASPI-09',
+          durationMs: 380,
+          resultHash: makeLocalHash('WP-SCP-9010'),
+          verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+          usefulWorkScore: 94,
+          wealthConcentrationFactor: 1.0001,
+          rewardNvc: 0.939906,
+          energyWh: 0.04,
+          timestamp: iso(1000 * 60 * 32),
+        },
+        {
+          workProofId: 'WP-ORC-9009',
+          workType: 'Oracle Check',
+          nodeId: 'NVC-CITIZEN-EU-21',
+          durationMs: 290,
+          resultHash: makeLocalHash('WP-ORC-9009'),
+          verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'NVC-MINER-RASPI-09'],
+          usefulWorkScore: 88,
+          wealthConcentrationFactor: 1.0001,
+          rewardNvc: 0.879912,
+          energyWh: 0.03,
+          timestamp: iso(1000 * 60 * 24),
+        },
+        {
+          workProofId: 'WP-SCN-9008',
+          workType: 'HyperScanner Check',
+          nodeId: 'NVC-CITIZEN-US-14',
+          durationMs: 410,
+          resultHash: makeLocalHash('WP-SCN-9008'),
+          verifierNodes: ['ORACLE-EU-01', 'ORACLE-ID-01', 'NVC-CITIZEN-EU-21'],
+          usefulWorkScore: 91,
+          wealthConcentrationFactor: 1.0001,
+          rewardNvc: 0.909909,
+          energyWh: 0.04,
+          timestamp: iso(1000 * 60 * 16),
+        },
+        {
+          workProofId: 'WP-STR-9007',
+          workType: 'Citizen Storage',
+          nodeId: 'NVC-MINER-RASPI-09',
+          durationMs: 650,
+          resultHash: makeLocalHash('WP-STR-9007'),
+          verifierNodes: ['ORACLE-US-01', 'NVC-CITIZEN-EU-21', 'NVC-CITIZEN-US-14'],
+          usefulWorkScore: 85,
+          wealthConcentrationFactor: 1.0001,
+          rewardNvc: 0.849915,
+          energyWh: 0.05,
+          timestamp: iso(1000 * 60 * 9),
+        },
+        {
+          workProofId: 'WP-HEAL-9006',
+          workType: 'Self-Heal Task',
+          nodeId: 'NVC-CITIZEN-EU-21',
+          durationMs: 320,
+          resultHash: makeLocalHash('WP-HEAL-9006'),
+          verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+          usefulWorkScore: 96,
+          wealthConcentrationFactor: 1.0001,
+          rewardNvc: 0.959904,
+          energyWh: 0.04,
+          timestamp: iso(1000 * 60 * 4),
+        },
+      ],
+      workMarketplace: [
+        {
+          id: 'TASK-ORC-01',
+          workType: 'Oracle Check',
+          requesterId: 'NVC-GOVERNOR-SCP',
+          title: 'Regional $3.14 Oracle Quorum Audit Round',
+          offeredRewardNvc: 0.85,
+          status: 'open',
+        },
+        {
+          id: 'TASK-SCN-02',
+          workType: 'HyperScanner Check',
+          requesterId: 'NVC-MERCHANT-HUB-07',
+          title: 'Scan 24 New Marketplace Contracts for Zero Riba',
+          offeredRewardNvc: 0.92,
+          status: 'open',
+        },
+        {
+          id: 'TASK-STR-03',
+          workType: 'Citizen Storage',
+          requesterId: 'NVC-CITIZEN-EU-21',
+          title: 'Pin Encrypted Citizen KYC Proof Shards (3 Peers)',
+          offeredRewardNvc: 0.78,
+          status: 'open',
+        },
+        {
+          id: 'TASK-VAL-04',
+          workType: 'Validating Halal TX',
+          requesterId: 'NVC-OPEN-MARKET-02',
+          title: 'Verify Real-Economy Grain Escrow Batch',
+          offeredRewardNvc: 0.88,
+          status: 'open',
+        },
+      ],
+    },
+    antiPlutocracy: {
+      giniCoefficient: 0.21,
+      top10ControlPercent: 18.4,
+      rewardFairnessScore: 98.8,
+      constitutionalRulesLocked: true,
+    },
+    adaptiveConsensus: {
+      mode: 'Normal',
+      healthyStreakBlocks: 1042,
+      validatorRedundancy: 3,
+      oracleCheckFreqSec: 5,
+      maxTxBatchSize: 350,
+      quarantinedNodes: [],
+      adaptiveLog: [
+        {
+          id: 'adp-seed-1',
+          blockHeight: 1042,
+          reason: 'Healthy 1000+ block streak verified; redundant verification balanced at 0.04 Wh/tx',
+          parameter: 'AdaptiveMode',
+          oldValue: 'Eco',
+          newValue: 'Normal (3 Validators · 5s Oracle)',
+          timestamp: iso(1000 * 60 * 10),
+        },
+        {
+          id: 'adp-seed-2',
+          blockHeight: 1018,
+          reason: 'Validator threat probe intercepted; temporarily raised redundancy before restoring Normal',
+          parameter: 'oracleCheckFreqSec',
+          oldValue: '5s',
+          newValue: '2s -> 5s (Self-Restored)',
+          timestamp: iso(1000 * 60 * 28),
+        },
+      ],
+    },
+    failurePrevention: {
+      totalAutoFixes: 7,
+      checks: [
+        {
+          id: 'centralization-drift',
+          name: 'a. Centralization Drift (>30% Top-10 Control)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Distributed SCP validation across Citizen nodes (Top 10 <= 18%).',
+        },
+        {
+          id: 'energy-waste-drift',
+          name: 'b. Energy Waste Drift (>10% Energy/Tx Rise)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Lightweight PoUW + SCP active at 0.04 Wh/tx.',
+        },
+        {
+          id: 'wealth-concentration-drift',
+          name: 'c. Wealth Concentration Drift (Gini > 0.35)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'WealthConcentrationFactor active; small Citizen rewards boosted.',
+        },
+        {
+          id: 'oracle-drift',
+          name: 'd. Oracle Drift (2+ Oracles > 0.1% From $3.14)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Oracle Predictive Shield locked Peg at $3.14 USD.',
+        },
+        {
+          id: 'scam-infiltration',
+          name: 'e. Scam Infiltration (HyperScanner Trigger)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Auto-banned rogue creator & froze scam spec (0 Scams Passed).',
+        },
+        {
+          id: 'dead-money',
+          name: 'f. Dead Money (>10% Inactive 90d Supply)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Circular useful-work velocity verified (Productive Value > 95%).',
+        },
+        {
+          id: 'self-heal-failure',
+          name: 'g. Self-Heal Failure (Slow Promotion >= 2x)',
+          status: 'GREEN / AUTO-FIXED',
+          fixCount: 1,
+          lastAction: 'Standby Citizen failover slots armed (<1s auto-promotion).',
+        },
+      ],
+    },
   };
 }
 
@@ -821,6 +1019,10 @@ export function applyLocalProposalFallback(
   prev: EcosystemSnapshot,
   params: { title: string; description: string; proposer: string },
 ): { ok: boolean; proposal?: EcosystemSnapshot['proposals'][number]; snapshot: EcosystemSnapshot; error?: string } {
+  const constitutional = isConstitutionalViolation(params.title, params.description);
+  if (constitutional.violated) {
+    return { ok: false, snapshot: prev, error: constitutional.reason };
+  }
   const scan = preScreenCompliance(`${params.title} ${params.description}`);
   if (!scan.passed) {
     return { ok: false, snapshot: prev, error: scan.message };
@@ -1165,4 +1367,68 @@ export function buildLocalProvenanceReport(
     sha256: makeLocalHash(query),
   };
 }
+
+export function applyLocalClaimWorkTaskFallback(
+  prev: EcosystemSnapshot,
+  params: { taskId: string; citizenId: string },
+): { ok: boolean; rewardNvc?: number; workProofId?: string; snapshot: EcosystemSnapshot; error?: string } {
+  const pouw = prev.pouw;
+  const task = pouw?.workMarketplace.find((t) => t.id === params.taskId && t.status === 'open');
+  const citizen = prev.citizens.find((c) => c.id === params.citizenId && c.kycVerified);
+  if (!pouw || !task) return { ok: false, snapshot: prev, error: 'Useful work task unavailable.' };
+  if (!citizen) return { ok: false, snapshot: prev, error: '1-KYC Citizen node required.' };
+
+  const workScore = Math.round(task.offeredRewardNvc * 100);
+  const calc = computePouwRewardNvc({
+    usefulWorkScore: workScore,
+    uptimeRatio: 0.99,
+    purityScore: 1,
+    walletHoldingNvc: citizen.balanceNvc,
+  });
+  const timestamp = new Date().toISOString();
+  const wpId = `WP-${Date.now().toString(36).toUpperCase()}`;
+  const proof: WorkProofRecord = {
+    workProofId: wpId,
+    workType: task.workType,
+    nodeId: citizen.id,
+    durationMs: 280,
+    resultHash: makeLocalHash(`wp-${wpId}-${citizen.id}-${timestamp}`),
+    verifierNodes: ['ORACLE-US-01', 'ORACLE-ID-01', 'ORACLE-EU-01'],
+    usefulWorkScore: workScore,
+    wealthConcentrationFactor: calc.wealthConcentrationFactor,
+    rewardNvc: calc.rewardNvc,
+    energyWh: 0.03,
+    timestamp,
+  };
+
+  return {
+    ok: true,
+    rewardNvc: calc.rewardNvc,
+    workProofId: wpId,
+    snapshot: {
+      ...prev,
+      citizens: prev.citizens.map((c) =>
+        c.id === citizen.id
+          ? {
+              ...c,
+              balanceNvc: Number((c.balanceNvc + calc.rewardNvc).toFixed(6)),
+              minedTotalNvc: Number((c.minedTotalNvc + calc.rewardNvc).toFixed(6)),
+              miningSessions: c.miningSessions + 1,
+            }
+          : c,
+      ),
+      pouw: {
+        ...pouw,
+        totalUsefulWorkDone: pouw.totalUsefulWorkDone + 1,
+        workProofs: [proof, ...pouw.workProofs].slice(0, 10),
+        workMarketplace: pouw.workMarketplace.map((t) =>
+          t.id === task.id
+            ? { ...t, status: 'completed' as const, completedBy: citizen.id, workProofId: wpId }
+            : t,
+        ),
+      },
+    },
+  };
+}
+
 

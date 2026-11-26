@@ -1,18 +1,25 @@
 import { useState, type FormEvent } from 'react';
-import { Bot, Brain, Eye, Lock, Network, Shield, ShieldCheck, Zap } from 'lucide-react';
+import { Bot, Brain, Eye, Flame, Lock, Network, Scale, Shield, ShieldCheck, Zap } from 'lucide-react';
 import { NovaPolicy, type EcosystemSnapshot } from '../../../shared/novaPolicy.ts';
 import { safeFetchJson } from '../lib/novaLocalEngine.ts';
+import { NovaHyperMindV2Section } from './NovaHyperMindV2Section.tsx';
 
 interface HyperMindPanelProps {
   snapshot: EcosystemSnapshot;
+  selectedCitizenId: string;
   proposalText: string;
   votePrediction: string | null;
+  onChangeSelectedCitizenId: (id: string) => void;
   onChangeProposalText: (v: string) => void;
   onPredictGovernance: (e: FormEvent) => void;
   onSimulateWhaleAttack: () => void;
   onSimulateScamApp: () => void;
   onSimulateOracleManipulation: () => void;
   onSelfHealNetwork: () => void;
+  onSimulatePlutocracyAttack: () => void;
+  onSimulateWasteAttack: () => void;
+  onClaimWorkTask: (taskId: string) => void;
+  onRunFailureScan: () => void;
 }
 
 function getHyperModuleIcon(id: string) {
@@ -36,14 +43,20 @@ function getHyperModuleIcon(id: string) {
 
 export function HyperMindPanel({
   snapshot,
+  selectedCitizenId,
   proposalText,
   votePrediction,
+  onChangeSelectedCitizenId,
   onChangeProposalText,
   onPredictGovernance,
   onSimulateWhaleAttack,
   onSimulateScamApp,
   onSimulateOracleManipulation,
   onSelfHealNetwork,
+  onSimulatePlutocracyAttack,
+  onSimulateWasteAttack,
+  onClaimWorkTask,
+  onRunFailureScan,
 }: HyperMindPanelProps) {
   const [logSeverityFilter, setLogSeverityFilter] = useState<'all' | 'blocked' | 'predicted' | 'healed'>('all');
   const [checkWallet, setCheckWallet] = useState('NVC-MINER-RASPI-09');
@@ -91,7 +104,7 @@ export function HyperMindPanel({
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-amber-400" />
             <h2 className="text-base font-semibold text-white">
-              Hyper-Intelligence Command Center (NovaHyperMind)
+              Hyper-Intelligence Command Center (NovaHyperMind v2)
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -138,8 +151,33 @@ export function HyperMindPanel({
             <Zap className="w-3.5 h-3.5" />
             Trigger Self-Heal
           </button>
+          <button
+            type="button"
+            onClick={onSimulatePlutocracyAttack}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 border border-amber-400/50 text-slate-950 text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+          >
+            <Scale className="w-3.5 h-3.5" />
+            Simulate Plutocracy Attack
+          </button>
+          <button
+            type="button"
+            onClick={onSimulateWasteAttack}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-700 hover:bg-red-600 border border-red-400/50 text-white text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+          >
+            <Flame className="w-3.5 h-3.5" />
+            Simulate Waste Attack
+          </button>
         </div>
       </div>
+
+      {/* NovaHyperMind v2 Panels: PoUW, Anti-Plutocracy, Adaptive Consensus, Failure Prevention, Real Work Ledger */}
+      <NovaHyperMindV2Section
+        snapshot={snapshot}
+        selectedCitizenId={selectedCitizenId}
+        onChangeSelectedCitizenId={onChangeSelectedCitizenId}
+        onClaimWorkTask={onClaimWorkTask}
+        onRunFailureScan={onRunFailureScan}
+      />
 
       {/* 7 Hyper-Intelligence AI Module Cards */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -222,10 +260,10 @@ export function HyperMindPanel({
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
             <div>
               <h3 className="text-base font-semibold text-white">
-                Predictive Governance AI (1 Person = 1 Vote)
+                Predictive Governance AI (Quadratic 1-KYC Vote)
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Whale-proof voting predictor powered by Citizen KYC & Reputation Score.
+                Whale-proof voting predictor: sqrt(UsefulWork × Reputation × 1-KYC).
               </p>
             </div>
 
@@ -311,3 +349,4 @@ export function HyperMindPanel({
     </div>
   );
 }
+
